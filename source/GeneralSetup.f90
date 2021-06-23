@@ -1,6 +1,7 @@
     module GeneralSetup
     use CalcLike
     use MonteCarlo
+    use BayOp
     use GeneralTypes
     use BaseParameters
     use SampleCollector
@@ -10,17 +11,22 @@
     use ParamPointSet
     implicit none
 
-    integer, parameter :: action_MCMC=0, action_importance=1, action_maxlike=2, action_hessian=3, action_tests=4
+    integer, parameter :: action_MCMC=0, action_importance=1, action_maxlike=2, action_BayOp=3, action_tests=4, action_hessian=5
 
     Type :: TSetup
         integer :: action = action_MCMC
         integer :: sampling_method = sampling_metropolis
         integer :: samples
+	integer :: BayOpDimensions
+        integer :: n_random
+        character(len=40) :: OutputName
+        logical :: use_refine
         class(TGeneralConfig), allocatable:: Config
         class(TLikeCalculator), allocatable:: LikeCalculator
         class(TSampleCollector), allocatable :: SampleCollector
         class(TSamplingAlgorithm), allocatable :: SamplingAlgorithm
         class(TImportanceSampler), allocatable :: ImportanceSampler
+    	class(TBayOptimisor), allocatable :: BayOptimisor
     contains
     procedure :: Init => TSetup_Init
     procedure :: ReadParams  => TSetup_ReadParams
@@ -28,6 +34,7 @@
     procedure :: GetMinimizer => TSetup_GetMinimizer
     procedure :: DoSampling => TSetup_DoSampling
     procedure :: DoTests => TSetup_DoTests
+    procedure :: DoBayOp => TSetup_DoBayOp
     end type
 
     class(TSetup), allocatable :: Setup
@@ -49,7 +56,7 @@
     class(TSettingIni) :: Ini
 
     call this%Config%ReadParams(Ini)
-    this%action = Ini%Read_Int('action',action_MCMC,min=0,max=action_tests)
+    this%action = Ini%Read_Int('action',action_MCMC,min=0,max=action_hessian)
     if (this%action/=action_importance) use_fast_slow = Ini%Read_Logical('use_fast_slow',.true.)
 
     call this%LikeCalculator%InitWithParams(Ini, this%Config)
@@ -72,6 +79,12 @@
         allocate(TImportanceSampler::this%ImportanceSampler)
         call this%ImportanceSampler%ReadParams(Ini)
         if (this%ImportanceSampler%redo_theory) call this%Config%Calculator%ReadImportanceParams(Ini)
+    else if (this%action == action_BayOp) then
+        allocate(TBayOptimisor::this%BayOptimisor)
+        this%BayOpDimensions = Ini%Read_Int('BayOpDimension')
+        this%n_random = Ini%Read_Int('n_random')
+        this%OutputName = Ini%Read_String('OutputName')
+	this%use_refine = Ini%Read_Logical('Refine')
     end if
 
     end subroutine TSetup_ReadParams
@@ -99,6 +112,10 @@
 
     if (allocated(this%ImportanceSampler)) then
         call this%ImportanceSampler%Init(this%LikeCalculator)
+    end if
+
+    if (allocated(this%BayOptimisor)) then
+        call this%BayOptimisor%Init(this%LikeCalculator)
     end if
 
     end subroutine TSetup_DoneInitialize
@@ -183,5 +200,16 @@
     call DoStop()
 
     end subroutine TSetup_DoTests
+
+    subroutine TSetup_DoBayOp(this, Params)
+    class(TSetup) :: this
+    Type(ParamSet) :: Params
+
+    write(*,*) this%OutputName
+    write(*,*) 'Number of parameters is ', this%BayOpDimensions
+    write(*,*) 'Number of random samples is ', this%n_random
+
+    call this%BayOptimisor%Sampler(Params, this%BayOpDimensions, this%n_random, this%use_refine, this%OutputName)
+    end subroutine TSetup_DoBayOp
 
     end module GeneralSetup

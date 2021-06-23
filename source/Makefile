@@ -33,8 +33,8 @@ ifeq "$(mpierr)" "0"
 MPIF90C  ?= mpiifort -fc=ifort
 endif
 
-FFLAGS = -mkl -O3 -no-prec-div -fpp
-DEBUGFLAGS = -mkl -g -check all -check noarg_temp_created -traceback -fpp -fpe0
+FFLAGS = -mkl -O3 -no-prec-div -fpp -heap-arrays
+DEBUGFLAGS = -mkl -g -check all -check noarg_temp_created -traceback -fpp -fpe0 -heap-arrays
 #add -fpe0 to check for floating point errors (think lowLike also throws these harmlessly)
 MODOUT = -module $(OUTPUT_DIR)
 LAPACKL =
@@ -172,7 +172,9 @@ LIKEFILES =  $(OUTPUT_DIR)/DataLikelihoods.o $(OUTPUT_DIR)/calclike.o
 OBJFILES = $(OUTPUT_DIR)/ObjectParamNames.o $(OUTPUT_DIR)/settings.o \
 	$(OUTPUT_DIR)/samples.o $(OUTPUT_DIR)/IO.o $(OUTPUT_DIR)/likelihood.o $(OUTPUT_DIR)/GeneralTypes.o $(OUTPUT_DIR)/BaseParameters.o \
 	$(OUTPUT_DIR)/propose.o $(OUTPUT_DIR)/ParamSet.o $(OUTPUT_DIR)/PowellConstrainedMinimize.o $(OUTPUT_DIR)/ImportanceSampling.o \
-	$(OUTPUT_DIR)/MCMC.o $(OUTPUT_DIR)/minimize.o $(OUTPUT_DIR)/SampleCollector.o $(OUTPUT_DIR)/GeneralSetup.o
+        $(OUTPUT_DIR)/BayOp.o $(OUTPUT_DIR)/MCMC.o $(OUTPUT_DIR)/minimize.o $(OUTPUT_DIR)/SampleCollector.o \
+        $(OUTPUT_DIR)/bobyqa_module.o $(OUTPUT_DIR)/HelperRoutines.o $(OUTPUT_DIR)/GeneralSetup.o
+
 
 
 SUPERNOVAE = $(OUTPUT_DIR)/supernovae_Union2.o $(OUTPUT_DIR)/supernovae_SNLS.o $(OUTPUT_DIR)/supernovae_JLA.o
@@ -223,10 +225,14 @@ $(OUTPUT_DIR)/ParamSet.o: $(OUTPUT_DIR)/BaseParameters.o $(OUTPUT_DIR)/samples.o
 $(OUTPUT_DIR)/DataLikelihoods.o: $(OUTPUT_DIR)/likelihood.o $(OUTPUT_DIR)/ParamSet.o $(DATAMODULES)
 $(OUTPUT_DIR)/calclike.o: $(OUTPUT_DIR)/DataLikelihoods.o
 $(OUTPUT_DIR)/ImportanceSampling.o: $(OUTPUT_DIR)/calclike.o $(OUTPUT_DIR)/IO.o
+$(OUTPUT_DIR)/bobyqa_module.o: $(OUTPUT_DIR)/ParamSet.o
+$(OUTPUT_DIR)/HelperRoutines.o: $(OUTPUT_DIR)/ParamSet.o $(OUTPUT_DIR)/calclike.o
+$(OUTPUT_DIR)/BayOp.o: $(OUTPUT_DIR)/bobyqa_module.o $(OUTPUT_DIR)/HelperRoutines.o $(OUTPUT_DIR)/calclike.o $(OUTPUT_DIR)/ParamSet.o
 $(OUTPUT_DIR)/MCMC.o: $(OUTPUT_DIR)/calclike.o $(OUTPUT_DIR)/propose.o $(OUTPUT_DIR)/ParamSet.o
 $(OUTPUT_DIR)/minimize.o: $(OUTPUT_DIR)/PowellConstrainedMinimize.o $(OUTPUT_DIR)/MCMC.o
 $(OUTPUT_DIR)/SampleCollector.o: $(OUTPUT_DIR)/MCMC.o
-$(OUTPUT_DIR)/GeneralSetup.o: $(OUTPUT_DIR)/SampleCollector.o $(OUTPUT_DIR)/ImportanceSampling.o  $(OUTPUT_DIR)/minimize.o
+$(OUTPUT_DIR)/GeneralSetup.o: $(OUTPUT_DIR)/SampleCollector.o $(OUTPUT_DIR)/ImportanceSampling.o  $(OUTPUT_DIR)/minimize.o \
+							$(OUTPUT_DIR)/BayOp.o  $(OUTPUT_DIR)/HelperRoutines.o
 
 $(OUTPUT_DIR)/driver.o: $(OUTPUT_DIR)/GeneralSetup.o $(OUTPUT_DIR)/CosmologyConfig.o
 

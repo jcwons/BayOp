@@ -309,7 +309,7 @@
         best_like = this%FindBestFit_indices(num_params_used,vect)
         deallocate(this%minimize_indices, this%minimize_indices_used)
         last_like = best_like
-
+w
         if (BaseParams%num_fast>0 .and. BaseParams%num_slow /=0 .and. this%minimize_separate_fast) then
             if (Feedback>0) print*,'minmizing fast parameters again'
             vect_fast=vect(Proposer%indices(Proposer%Slow%n+1:Proposer%All%n))

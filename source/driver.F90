@@ -279,7 +279,9 @@
             if (status/=0) call MpiStop('Error reading test_used_params array')
         end if
         call Setup%DoTests(test_output_root,test_paramvals, test_check_compare)
-    else
+    else if (Setup%action==action_BayOp) then
+                call Setup%DoBayOp(Params)
+        else
         call DoAbort('undefined action')
     end if
     call LogFile%Close()

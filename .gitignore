@@ -1,10 +1,12 @@
+Output/
 plot_data/
 dist/
 scripts/
 chains/
 *.mod
 *.a
-*.o
+*.o*
+*.pbs
 *.sm
 *~
 .metadata
@@ -47,3 +49,4 @@ var/
 *.egg-info/
 .installed.cfg
 *.egg
+*.ini

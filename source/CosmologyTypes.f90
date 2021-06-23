@@ -10,9 +10,11 @@
         derived_thetaEQ=12, derived_theta_rs_EQ = 13 !index in derived parameters array
 
     integer, parameter :: As_index=1, ns_index =2, nrun_index=3, nrunrun_index=4, amp_ratio_index = 5, &
-        & nt_index= 6, ntrun_index = 7, Aphiphi_index = 8, last_power_index = Aphiphi_index
+        & nt_index= 6, ntrun_index = 7, Aphiphi_index = 8, &
+	& AmpOsc_index = 9, linfreq_index = 10, phase_index = 11, newP4_index = 12, newP5_index = 13, &
+	& newP6_index = 14, last_power_index = newP6_index ! Added new parameters
 
-    integer, parameter :: max_inipower_params = 10
+    integer, parameter :: max_inipower_params = 16
 
     real(mcp), parameter :: cl_norm = 1e-10_mcp !units for As
     integer, parameter :: max_derived_parameters = 30
@@ -138,7 +140,10 @@
 
     !Called after this%init
     num_hard = slow_num
+print*, 'num_hard = ', num_hard
     num_initpower = semi_slow_num
+print*, 'num_initpower = ', num_initpower
+print*, 'num_theory_params = ', num_theory_params 
     if (num_hard + num_initpower /= num_theory_params) &
         call MpiStop('SetTheoryParameterNumbers: parameter numbers do not match')
     index_initpower = num_hard+1
