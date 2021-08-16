@@ -396,7 +396,7 @@
 	character(len =*) :: text
 	open(1, file=text)
 	do i=1,size(array1)
-		write(1,*) array1(i), array2(i), array3(i), array4(i), array5(i), array6(i)
+		write(1,'(6E15.5)') array1(i), array2(i), array3(i), array4(i), array5(i), array6(i)
 	end do
 	close(1)
 	end subroutine THelperRoutines_CreateOutput
