@@ -31,7 +31,7 @@
 !>	TGaussianRegressor
 
 	
-! In 2D we have multiple kernels each with their own correlation length. The kernel only has 1 hyperparameter, the amplitude gets multiplied in the end
+! Returns gaussian kernel without the signal variance in front. Only hyperparameter is correlation length. Variance is added later
 	function TGaussianRegressor_Kernel(this, X, Y, hypers) result(kernel)
 	class(TGaussianRegressor) :: this
 	real(mcp), intent(in), dimension (:) :: X, Y
@@ -48,7 +48,7 @@
 
 	end function TGaussianRegressor_Kernel
 
-! full subroutine for 2D Gaussian
+! Routine to make predictions via Gaussian Process Regression
 	subroutine TGaussianRegressor_GPR(this, hypers, XData, YData, XPred, alpha, mu, std, input_dim, YMax)
 	class(TGaussianRegressor) :: this
 	real(mcp), intent(in), dimension(:) :: hypers
@@ -74,7 +74,7 @@
 	end do
 	! add jitter on the diagonal to make cholesky stable
 	do i=1, size(YData)
-		K(i,i) = K(i,i) + amplitude * 1e-10_mcp
+		K(i,i) = K(i,i) + amplitude * 1e-10_mcp ! amplitude * 1e-10_mcp is only for stability. Change this value if you have noise in function
 	end do
 	
 	! Ks = kernel(XData,XPred)
@@ -98,7 +98,7 @@
 	YMax = MAXVAL(YData) ! Corresponding maximum of data. Get here so that mu and YMax are consistent with same normalisation 
 	end subroutine TGaussianRegressor_GPR
 
-! Calling Bobyqa, but this time with 3 parameter to be fixed
+! Calling Bobyqa and GPR
 	subroutine TGaussianRegressor_Optimise(this, hypers, XData, YData, XPred,  mu, std, n_dim, bobyyes, YMax)
 	class(TGaussianRegressor) :: this
 	real(mcp), intent(inout), dimension(:) :: hypers
@@ -133,8 +133,8 @@
 		end if
 	end do
 	
-	npt = (n+1)*(n+2)/2
-!	npt =  2*n + 1 ! there are some conditions on this parameter, but no idea. Just try. Higher npt = more runs
+	npt = (n+1)*(n+2)/2 ! there are some conditions on this parameter, but no idea. Higher npt = more runs
+!	npt =  2*n + 1 ! This is most commonly used, but often made bobyqa end in local,non-global maximum
 	call this%Normalize_Y(Ydata, Ydata_norm, mean_norm, std_norm)
 
 	this%prior_amp = std_norm ! rescaling the hyper for the error to be of order 1
@@ -158,7 +158,8 @@
 	call this%GPR(hypers, XData, YData_norm, XPred, alpha, mu, std, n_dim, YMax)
 	write(*,*) 'Best fit point is: ', MAXVAL(YData) 
 	contains 
-  
+	
+	!Calculating the maximum likelihood of the data
 	function NegLogLike(hypers, XData, YData, XPred, n_dim) result(nll)
 	real(mcp) :: nll
 	real(mcp), intent(in) :: XData(:,:), YData(:), XPred(:,:)
@@ -188,10 +189,10 @@
 	
 	alpha = this%solvvec(TRANSPOSE(L), this%solvvec(L,Ydata)) ! K^-1 Ydata
 	
-	nll = DOT_PRODUCT(Ydata,alpha)/2 + Trace_L 
-		
+	nll = DOT_PRODUCT(Ydata,alpha)/2 + Trace_L 		
 	end function NegLogLike
 	
+	! Bobyqa requires a certain shape of the function that is called
 	subroutine calfun(n, theta, f)
 	integer, intent(in)	:: n
 	real(mcp) :: nll
@@ -228,10 +229,10 @@
 	call vdcdfnorm(size(Z),Z, cdf)
 
 	EI = (mu - YMax - xi) * cdf + std * pdf
-	Write(*,*) 'Maximal Value of EI is: ', MaxVal(EI)
-	Write(*,*) 'Maximal Improvment of Mu is: ', MaxVal(mu)-YMax
-	Write(*,*) 'Expected Improvement at this point is: ', EI(MAXLOC(mu,1))
-end subroutine TBayOptimisor_EI
+	if (Feedback > 1) Write(*,*) 'Maximal Value of EI is: ', MaxVal(EI)
+	if (Feedback > 1) Write(*,*) 'Maximal Improvment of Mu is: ', MaxVal(mu)-YMax
+	if (Feedback > 1)Write(*,*) 'Expected Improvement at this point is: ', EI(MAXLOC(mu,1))
+	end subroutine TBayOptimisor_EI
 
 ! find maximumal expected improvement and returns next_X as position for the next measurement	
 	subroutine TBayOptimisor_propose(this, mu, YMax, std, xi, XPred ,next_X, EI)
@@ -251,7 +252,7 @@ end subroutine TBayOptimisor_EI
 	end subroutine TBayOptimisor_propose
 	
 	
-! Master routine for this module
+! Routine generates random samples and then iterates over GPR+EI for n_iterations or when finished
 	subroutine TBayOptimisor_BayOp(this, Params, XData, XPred, hypers, which_param, XBest, xi, Cutoff_EI, n_iterations, n_random, YMax, OutputName)
 	class(TBayOptimisor) :: this
 	Type(ParamSet) Params
@@ -260,7 +261,7 @@ end subroutine TBayOptimisor_EI
 	real(mcp), intent(inout) :: YMax
 	integer, intent(in) :: n_iterations, n_random, which_param(:)
 	character(len=*), intent(inout) :: OutputName
-	character(len=40) :: PredOutput
+	!character(len=40) :: PredOutput	! Option to print mu and std in every run. Might implement at some point with logical in .ini
 	real(mcp), allocatable, dimension(:) :: Ydata, YData_loop, mu, std, Ei
 	real(mcp), allocatable :: XData_loop(:,:), Next_X(:,:)
 	logical :: bobyyes = .True.
@@ -277,7 +278,7 @@ end subroutine TBayOptimisor_EI
 	allocate(next_X(1,n_dim))
 	allocate(mu(n_Grid-n_random), std(n_Grid-n_random), EI(n_Grid-n_random))
 	
-        !ppos = scan(trim(OutputName),".", BACK=.true.)                          
+	!ppos = scan(trim(OutputName),".", BACK=.true.)                          
 	!PredOutput = OutputName(1:ppos-1) // '_Pred.txt'                                                          
 	!write(*,*) 'PredOutput is', PredOutput
 	
@@ -292,7 +293,7 @@ end subroutine TBayOptimisor_EI
 		do ii=1, n_dim
 			XData_loop(1:i-1, ii) = XData(1:i-1, ii)
 		end do
-		! write results to output file
+		! write results to output file HERE I SHOULD USE THE PRINTMU FUNCTION IN THE PROFILE LIKELIHOOD TO MAKE THIS NICER
 		if (n_dim == 3) then
 			call this%CreateOutput(XData_loop(:,1), XData_loop(:,2), YData_loop, XData_loop(:,3), XData_loop(:,3), XData_loop(:,3), OutputName)
 		else if (n_dim == 4) then
@@ -301,8 +302,8 @@ end subroutine TBayOptimisor_EI
 			call this%CreateOutput(XData_loop(:,1), XData_loop(:,2), YData_loop, XData_loop(:,3), XData_loop(:,4), XData_loop(:,5), OutputName)
 		end if
 		call CPU_time(time1)
-		! Run GPR
 		jj=i-n_random
+		! Some checks when to update hyperparameters
 		if (i < 300) then
 			bobyyes = .True.
 		else if (i > 301 .and. i<501 .and. MOD(i,5)==0) then
@@ -316,17 +317,18 @@ end subroutine TBayOptimisor_EI
 		else
 			bobyyes = .False.
 		end if
+		! Update hyperparameters(if bobyyes=T) + GPR
 		call this%Optimise(hypers, XData_loop, YData_loop, XPred, mu, std, n_dim, bobyyes, YMax)
 		!call this%CreateOutput(XPred(:,1), XPred(:,2), mu, PredOutput)                
   		
 		deallocate(YData_loop, XData_loop)
 
 		call CPU_time(time2)
-		if (Feedback > 0) write(*,*) 'Time to propose with to bobyqa+GPR: ', time2-time0
+		if (Feedback > 1) write(*,*) 'Time to propose with to bobyqa+GPR: ', time2-time0
 		! Use EI to find next best point
 		call this%propose(mu, YMax, std, xi, XPred ,next_X, Ei) 
 		call CPU_time(time3)
-		if (Feedback > 0) write(*,*) 'Time to propose with BayOp: ', time3-time2
+		if (Feedback > 1) write(*,*) 'Time to propose with BayOp: ', time3-time2
 		! Add next point to XData
 		do ii=1, n_dim
 			XData(i,ii) = next_X(1,ii)
@@ -335,15 +337,16 @@ end subroutine TBayOptimisor_EI
 		write(*,*) 'Sampling the likelihood at:', next_X
 		! Sample Data	
 		YData(i) = this%LogLike(Params)
-                if (YData(i) < -1e10) then
-                        meanY = sum(Ydata(1:i-1))/(i-1)
-                        stdY = SUM(Ydata(1:i-1)**2) / (i-2)
-                        stdY = SQRT(stdY)
-                        YData(i) = meanY - stdY
-                        if (YData(i)>0.0) then
-                                YData(i)=-5
-                        end if
-                end if
+		! For some feature models CAMB fails and returns -1e31 for the likelihood. This turns the value into a bad point one std below the mean. Otherwise GPR does not work with the -1e31 outlier
+		if (YData(i) < -1e10) then
+				meanY = sum(Ydata(1:i-1))/(i-1)
+				stdY = SUM(Ydata(1:i-1)**2) / (i-2)
+				stdY = SQRT(stdY)
+				YData(i) = meanY - stdY
+				if (YData(i)>0.0) then
+						YData(i)=-5
+				end if
+		end if
 		write(*,*) 'Likelihood is:', YData(i)
 		! Remove Grid points with low EI	
 		if (i>4*n_random .and. ABS(MaxVal(EI) - EI_previous) < 1.0_mcp) then	! Only remove points after having a decent amount of samples 
@@ -373,7 +376,7 @@ end subroutine TBayOptimisor_EI
 			write(*,*) 'MAXVAL(EI)< 1e-20_mcp) ending BayOp before 500 samples'
 			exit
 		end if
-		if (Feedback > 0) call this%Memory(MemGB)
+		if (Feedback > 1) call this%Memory(MemGB)
 		j=i	! If loop finishes early, there will be empty entries in arrays. Integer j counts how many non-empty entries there are.
 	end do
 	! Get best point
@@ -383,127 +386,57 @@ end subroutine TBayOptimisor_EI
 	end subroutine TBayOptimisor_BayOp
 	
 	! Master routine for this module
-	subroutine TBayOptimisor_Sampler(this, Params, input_dim, n_random, use_refine, OutputName)
+	subroutine TBayOptimisor_Sampler(this, Params, input_dim, n_random, use_refine, OutputName, baseline, xi, Cutoff_EI)
 	class(TBayOptimisor) :: this
 	Type(ParamSet) Params
 	real(mcp), allocatable, dimension(:) :: hypers
 	real(mcp), allocatable, dimension(:,:) :: XData, XPred, XBest
-	real(mcp) :: xi, Cutoff_EI, YMax, YMaxOld
-	integer, parameter :: n_iterations = 3000
-	integer, allocatable, dimension(:) :: which_param, n_input ! Parameter varied, 17 = As
+	real(mcp), intent(in) :: xi, Cutoff_EI, baseline
+	real(mcp) :: YMax, YMaxOld
+	integer, parameter :: n_iterations = 3000	! Hard coded maximum of number of iterations of BayOp. Should finish before 1000. Can be increased if necessary.
+	integer, allocatable, dimension(:) :: which_param, n_input ! I haven't figured out how CosmoMC understands which parameters are varied and which are constant. Doing this by hand.
 	integer, intent(in) :: input_dim 
 	integer, intent(inout) ::n_random
 	logical, intent(in) :: use_refine
 	character(len=*), intent(inout) :: OutputName
 	integer :: n_Grid, ii, n_max, n_refine, ppos, i
 	
-	allocate( which_param(input_dim))
-	allocate( n_input(input_dim) )
-		
-	write(*,*) 'Number of parameters sampled over: ', input_dim
-	if (input_dim == 2) then
-		which_param = [25, 26]
-	else if (input_dim == 3) then
-		which_param = [25, 26, 27]
-	else if (input_dim == 4) then
-		which_param = [25, 26, 27, 28]
-        else if (input_dim == 5) then
-                which_param = [25, 26, 27, 28, 29] 
-	else
-		call MpiStop('Only BayOpDimension 2-5 is supported. Change in .ini file')
-	end if
-
-	print*, 'Parameters sampled over are:'
-	if (input_dim == 2) then
-		print*, 'Amplitude, Frequency'
-	else if (input_dim == 3) then
-		print*, 'Amplitude, Frequency, Phase'
-	else if (input_dim == 4) then
-		print*, 'Ampltidue, Frequency, Phase, NewP5'
-	else if (input_dim == 5) then                                 
-		print*, 'Ampltidue, Frequency, Phase, NewP4, NewP5' 
-	end if
-	do ii=1, input_dim
-		print*, BaseParams%PWidth(which_param(ii))
-	end do
-
-	if (Params%P(30) == 1) then
-		print*, "Using Linear Modulation to Power Spectrum"
-	else if (Params%P(30) == 2) then                                                                                                    
-		print*, "Using Logarithmic Modulation to Power Spectrum"
-	else if (Params%P(30) == 3) then                                                                                                    
-		print*, "Using Running Logarithmic Modulation to Power Spectrum"      
-	else if (Params%P(30) == 4) then                                                                                                    
-		print*, "Using Primordial Standard Clock to Power Spectrum for expansions"   
-	else if (Params%P(30) == 6) then
-		print*, "Using Primordial Standard Clock to Power Spectrum for contractions (Bounce) with w=p*w/k^(1/p)"
-        else if (Params%P(30) == 5) then                                                                                                
-		print*, "Using Primordial Standard Clock to Power Spectrum for contractions (Pyro) with w=p*w/k_p^(1/p)"                                                         
-	else
-		print*, "No idea what you are sampling, error incoming"
-	end if
-
-	! Derive some integers and parameter lengths needed to calculate the Grid
-	do ii=1, input_dim
-		n_input(ii) = ( BaseParams%PMax(which_param(ii)) - BaseParams%Pmin(which_param(ii)) )/BaseParams%PWidth(which_param(ii)) + 1
-	end do 
-	if (input_dim == 1) then
-		n_max = n_input(1)
-	else
-		n_max = MAXVAL(n_input) 
-	end if
-	n_Grid = n_input(1)
-	do ii=2, input_dim
-		n_Grid = n_input(ii) * n_Grid
-	end do
+	this%baseline = baseline ! Asign baseline value from .ini file to TBayOptimisor class variable
+	print*, this%baseline
+	! Calls Initialise in HelperRoutines. This will generate the grid and allocate the parameter. Also decides which parameters are varied in BayOp (which_param)
+	call this%Initialise(Params, hypers, XData, XPred, XBest, YMax, n_iterations, which_param, n_input, input_dim, n_random, n_Grid, ii, n_max, n_refine, i)
 	
-	! allocate input parameter
-	allocate( Xdata(n_iterations, input_dim))
-	allocate( XPred(n_Grid, input_dim) )
-	allocate( hypers(input_dim + 1) )
-	do ii=1, input_dim+1
-		hypers(ii)=1
-	end do
-	allocate( XBest(1, input_dim) )
-
-	call this%Grid(n_max, n_input, input_dim, which_param, XPred)
-	write(*,*) 'Parameter ranges are:' 	
-	i = n_input(1)
-	do ii=1, input_dim
-		if (ii==1) then
-			write(*,*) ii, XPred(1,ii), XPred(i,ii)
-		else
-			i = i * n_input(ii)
-			write(*,*) ii, XPred(1,ii), XPred(i,ii)
-		end if
-	end do
-	xi=0.0_mcp
-	Cutoff_EI=1e-5_mcp
+!	xi=0.0_mcp ! This should be in .ini file
+!	Cutoff_EI=1e-5_mcp ! This should be in .ini file
+	! This calls the main routine to start the Bayesian Optimisation. Including random samples, GPR, Bobyqa and EI
 	call this%BayOp(Params, XData, XPred, hypers, which_param, XBest, xi, Cutoff_EI, n_iterations, n_random, YMax, OutputName)
 	write(*,*) "Best fit point at:", XBest
 	write(*,*) "Likelihood at best fit:", YMax
 	
 	! Make refined search around maximum
 	if (use_refine) then
-		Cutoff_EI=1e-5_mcp
-		YMaxOld = YMax
-		n_refine = 21
+		YMaxOld = YMax	! Save old value to compare later
+		n_refine = 5	! How much smaller should the new stepwidth be. Default is 1/5
+		n_refine = n_refine*4+1	! Refine grid is 4 steps around the maximum (2 right, 2 left)
 		deallocate(XPred)
-		allocate(XPred(n_refine**input_dim, input_dim))
-		call this%Grid_refine(input_dim, n_refine, which_param, XBest, XPred)
-	        write(*,*) 'Parameter ranges are:'
-       		do ii=1, input_dim
+		allocate(XPred(n_refine**input_dim, input_dim))	! Allocate new Grid again
+		call this%Grid_refine(input_dim, n_refine, which_param, XBest, XPred)	! Create Grid around maximum
+		write(*,*) 'Parameter ranges are:'
+		do ii=1, input_dim
 			write(*,*) ii, XPred(1,ii), XPred(n_refine**ii,ii)
 		end do
-		ppos = scan(trim(OutputName),".", BACK=.true.)		
-		if (ii > 0) OutputName = OutputName(1:ppos-1) // '_refine.txt'
+
+		! Change output name to differentiate between before and refine
+		ppos = scan(trim(OutputName),".", BACK=.true.)					
+		if (ii > 0) OutputName = OutputName(1:ppos-1) // '_refine.txt'	
 		print*, 'New OutputName is', OutputName
-		call this%BayOp(Params, XData, XPred, hypers, which_param, XBest, xi, Cutoff_EI, n_iterations, n_random, YMax, OutputName)
+		call this%BayOp(Params, XData, XPred, hypers, which_param, XBest, xi, Cutoff_EI, n_iterations, n_random, YMax, OutputName) ! Call BayOp with new parameters
 		
 		write(*,*) "Best fit point at:", XBest
 		write(*,*) "Likelihood at best fit:", YMax
 		write(*,*) "Improvement due to refinement:", YMax-YMaxOld
 	end if
+	! Do some checks if best fit value is at prior boundary. If prior direction is split. This can be ignored. Otherwise there might be better fit outside the prior range
 	do i=1, input_dim
 		if (XBest(1,i) == BaseParams%Pmin(which_param(i))) then
 			write(*,*) 'Warning: Parameter', i, ' has best fit at prior boundary' 

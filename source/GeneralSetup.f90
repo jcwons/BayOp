@@ -20,6 +20,9 @@
 	integer :: BayOpDimensions
         integer :: n_random
         character(len=40) :: OutputName
+		real(mcp) :: baseline
+		real(mcp) :: xi
+		real(mcp) :: Cutoff_EI
         logical :: use_refine
         class(TGeneralConfig), allocatable:: Config
         class(TLikeCalculator), allocatable:: LikeCalculator
@@ -84,6 +87,10 @@
         this%BayOpDimensions = Ini%Read_Int('BayOpDimension')
         this%n_random = Ini%Read_Int('n_random')
         this%OutputName = Ini%Read_String('OutputName')
+		this%baseline = Ini%Read_Real('baseline')
+		this%xi = Ini%Read_Real('xi')
+		this%Cutoff_EI = Ini%Read_Real('Cutoff_EI')
+
 	this%use_refine = Ini%Read_Logical('Refine')
     end if
 
@@ -209,7 +216,7 @@
     write(*,*) 'Number of parameters is ', this%BayOpDimensions
     write(*,*) 'Number of random samples is ', this%n_random
 
-    call this%BayOptimisor%Sampler(Params, this%BayOpDimensions, this%n_random, this%use_refine, this%OutputName)
+    call this%BayOptimisor%Sampler(Params, this%BayOpDimensions, this%n_random, this%use_refine, this%OutputName, this%baseline, this%xi, this%Cutoff_EI)
     end subroutine TSetup_DoBayOp
 
     end module GeneralSetup

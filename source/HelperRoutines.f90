@@ -13,11 +13,12 @@
 
 	Type, extends(TLikelihoodUser) :: THelperRoutines
 	real(mcp) :: const_pi = 3.1415926535897932384626433832795_mcp
-	real(mcp) :: baseline = -12272.602152412439_mcp	! Planck TTTEE, simall, low-EE
+!	real(mcp) :: baseline = -12272.602152412439_mcp	! Planck TTTEE, simall, low-EE
 !        real(mcp) :: baseline = -12277.05138222037_mcp  ! TTTEE + lensing
 !	real(mcp) :: baseline = -1184.788_mcp	! For the test likelihood
-!	real(mcp) :: baseline = 0 
+	real(mcp) :: baseline 
 	contains
+	procedure :: Initialise => THelperRoutines_Initialise
 	procedure :: Memory => THelperRoutines_Memory ! Memory function for testing
 	procedure :: Linspace => THelperRoutines_Linspace
 	procedure :: Linspace_refine => THelperRoutines_Linspace_refine
@@ -42,6 +43,102 @@
 !*****************************************************************************************
 !>	THelperRoutines
 
+! Initialise BayOp. Get dimensions for quanitites, get grid, print some information
+	subroutine THelperRoutines_Initialise(this, Params, hypers, XData, XPred, XBest, YMax, n_iterations, which_param, n_input, input_dim, n_random, n_Grid, ii, n_max, n_refine, i)
+	class(THelperRoutines) :: this
+	Type(ParamSet) Params
+	real(mcp), intent(inout), allocatable, dimension(:) :: hypers
+	real(mcp), intent(inout), allocatable, dimension(:,:) :: XData, XPred, XBest
+	real(mcp), intent(inout) ::  YMax
+	integer, intent(in) :: n_iterations 
+	integer, intent(inout), allocatable, dimension(:) :: which_param, n_input ! Parameter varied, 17 = As
+	integer, intent(in) :: input_dim 
+	integer, intent(inout) ::n_random
+	integer, intent(inout) :: n_Grid, ii, n_max, n_refine, i
+
+
+	allocate( which_param(input_dim))
+	allocate( n_input(input_dim) )
+		
+	write(*,*) 'Number of parameters sampled over: ', input_dim
+	if (input_dim == 2) then
+		which_param = [25, 26]
+	else if (input_dim == 3) then
+		which_param = [25, 26, 27]
+	else if (input_dim == 4) then
+		which_param = [25, 26, 27, 28]
+        else if (input_dim == 5) then
+                which_param = [25, 26, 27, 28, 29] 
+	else
+		call MpiStop('Only BayOpDimension 2-5 is supported. Change in .ini file')
+	end if
+
+	print*, 'Parameters sampled over are:'
+	if (input_dim == 2) then
+		print*, 'Amplitude, Frequency'
+	else if (input_dim == 3) then
+		print*, 'Amplitude, Frequency, Phase'
+	else if (input_dim == 4) then
+		print*, 'Ampltidue, Frequency, Phase, NewP5'
+	else if (input_dim == 5) then                                 
+		print*, 'Ampltidue, Frequency, Phase, NewP4, NewP5' 
+	end if
+	do ii=1, input_dim
+		print*, BaseParams%PWidth(which_param(ii))
+	end do
+
+	if (Params%P(30) == 1) then
+		print*, "Using Linear Modulation to Power Spectrum"
+	else if (Params%P(30) == 2) then                                                                                                    
+		print*, "Using Logarithmic Modulation to Power Spectrum"
+	else if (Params%P(30) == 3) then                                                                                                    
+		print*, "Using Running Logarithmic Modulation to Power Spectrum"      
+	else if (Params%P(30) == 4) then                                                                                                    
+		print*, "Using Primordial Standard Clock to Power Spectrum for expansions"   
+	else if (Params%P(30) == 6) then
+		print*, "Using Primordial Standard Clock to Power Spectrum for contractions (Bounce) with w=p*w/k^(1/p)"
+        else if (Params%P(30) == 5) then                                                                                                
+		print*, "Using Primordial Standard Clock to Power Spectrum for contractions (Pyro) with w=p*w/k_p^(1/p)"                                                         
+	else
+		print*, "No idea what you are sampling, error incoming"
+	end if
+
+	! Derive some integers and parameter lengths needed to calculate the Grid
+	do ii=1, input_dim
+		n_input(ii) = ( BaseParams%PMax(which_param(ii)) - BaseParams%Pmin(which_param(ii)) )/BaseParams%PWidth(which_param(ii)) + 1
+	end do 
+	if (input_dim == 1) then
+		n_max = n_input(1)
+	else
+		n_max = MAXVAL(n_input) 
+	end if
+	n_Grid = n_input(1)
+	do ii=2, input_dim
+		n_Grid = n_input(ii) * n_Grid
+	end do
+	
+	! allocate input parameter
+	allocate( Xdata(n_iterations, input_dim))
+	allocate( XPred(n_Grid, input_dim) )
+	allocate( hypers(input_dim + 1) )
+	do ii=1, input_dim+1
+		hypers(ii)=1
+	end do
+	allocate( XBest(1, input_dim) )
+
+	call this%Grid(n_max, n_input, input_dim, which_param, XPred)
+	write(*,*) 'Parameter ranges are:' 	
+	i = n_input(1)
+	do ii=1, input_dim
+		if (ii==1) then
+			write(*,*) ii, XPred(1,ii), XPred(i,ii)
+		else
+			i = i * n_input(ii)
+			write(*,*) ii, XPred(1,ii), XPred(i,ii)
+		end if
+	end do
+	
+	end subroutine THelperRoutines_Initialise
 ! Subroutine to call current Memory usage
 	 subroutine THelperRoutines_Memory(this, valueRSS)
 	 use ifport !if on intel compiler
