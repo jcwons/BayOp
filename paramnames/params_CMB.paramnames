@@ -27,7 +27,7 @@ linfreq       lin_freq
 phase         phase
 newP4         newP4
 newP5         newP5
-newP6         newP6
+whichmodel    whichmodel
 H0*           H_0		#hubble parameter is H0 km/s/Mpc
 omegal*       \Omega_\Lambda
 omegam*       \Omega_m

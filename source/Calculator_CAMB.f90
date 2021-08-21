@@ -877,7 +877,7 @@
         InitPower%phase = CMB%InitPower(phase_index)
         InitPower%newP4 = CMB%InitPower(newP4_index)
         InitPower%newP5 = CMB%InitPower(newP5_index)
-        InitPower%newP6 = CMB%InitPower(newP6_index)        
+        InitPower%whichmodel = CMB%InitPower(whichmodel_index)        
 
 	if (InitPower%pivot_tensor/=InitPower%pivot_scalar) InitPower%tensor_parameterization = tensor_param_rpivot
         InitPower%As = cl_norm*CMB%InitPower(As_index)

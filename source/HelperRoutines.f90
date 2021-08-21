@@ -19,7 +19,7 @@
 	real(mcp) :: baseline 
 	contains
 	procedure :: Initialise => THelperRoutines_Initialise
-	procedure :: Memory => THelperRoutines_Memory ! Memory function for testing
+!	procedure :: Memory => THelperRoutines_Memory ! Memory function for testing
 	procedure :: Linspace => THelperRoutines_Linspace
 	procedure :: Linspace_refine => THelperRoutines_Linspace_refine
 	procedure :: GridMaker => THelperRoutines_GridMaker
@@ -140,48 +140,45 @@
 	
 	end subroutine THelperRoutines_Initialise
 ! Subroutine to call current Memory usage
-	 subroutine THelperRoutines_Memory(this, valueRSS)
-	 use ifport !if on intel compiler
-	 class(THelperRoutines) :: this
+!	 subroutine THelperRoutines_Memory(this, valueRSS)
+!	 use ifport !if on intel compiler
+!	 class(THelperRoutines) :: this
+!	 integer, intent(out) :: valueRSS
+!	 character(len=200):: filename=' '
+!	 character(len=80) :: line
+!	 character(len=8)  :: pid_char=' '
+!	 integer :: pid
+!	 logical :: ifxst
 
-
-	 integer, intent(out) :: valueRSS
-
-	 character(len=200):: filename=' '
-	 character(len=80) :: line
-	 character(len=8)  :: pid_char=' '
-	 integer :: pid
-	 logical :: ifxst
-
-	 valueRSS=-1    ! return negative number if not found
+!	 valueRSS=-1    ! return negative number if not found
 
 	 !--- get process ID
 
-	 pid=getpid()
-	 write(pid_char,'(I8)') pid
-	 filename='/proc/'//trim(adjustl(pid_char))//'/status'
+!	 pid=getpid()
+!	 write(pid_char,'(I8)') pid
+!	 filename='/proc/'//trim(adjustl(pid_char))//'/status'
 
 	! !--- read system file
 
-	 inquire (file=filename,exist=ifxst)
-	 if (.not.ifxst) then
-	   write (*,*) 'system file does not exist'
-	   return
-	 endif
-
-	 open(unit=100, file=filename, action='read')
-	 do
-	   read (100,'(a)',end=120) line
-	   if (line(1:6).eq.'VmRSS:') then
-		  read (line(7:),*) valueRSS
-		  exit
-	   endif
-	 enddo
-	 120 continue
-	 close(100)
-	 write(*,*) valueRSS , 'Used memory'
-	 return
-	 end subroutine THelperRoutines_Memory
+!	 inquire (file=filename,exist=ifxst)
+!	 if (.not.ifxst) then
+!	   write (*,*) 'system file does not exist'
+!	   return
+!	 endif
+!
+!	 open(unit=100, file=filename, action='read')
+!	 do
+!	   read (100,'(a)',end=120) line
+!	   if (line(1:6).eq.'VmRSS:') then
+!		  read (line(7:),*) valueRSS
+!		  exit
+!	   endif
+!	 enddo
+!	 120 continue
+!	 close(100)
+!	 write(*,*) valueRSS , 'Used memory'
+!	 return
+!	 end subroutine THelperRoutines_Memory
 	
 ! Subroutine creating the Grid in higher dimension
 	subroutine THelperRoutines_Linspace(this, Array, input_dim, which_param, n_input)
@@ -478,10 +475,10 @@
 	
 	mean = sum(Ydata)/size(Ydata)
 	Ydata_norm = Ydata - mean
-        write(*,*) 'mean of data is: ', mean
+        if (Feedback>1) write(*,*) 'mean of data is: ', mean
         std = SUM(Ydata_norm**2) / (SIZE(Ydata)-1) ! this is actually the variance
 	std = SQRT(std) 
-        write(*,*) 'std of data is: ', SQRT(std)     
+        if (Feedback>1) write(*,*) 'std of data is: ', SQRT(std)     
 
 	end subroutine THelperRoutines_Normalize_Y
 

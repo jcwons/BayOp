@@ -53,7 +53,7 @@
         real(dl) :: phase = 0.5_dl !phase of features
         real(dl) :: NewP4 = 0._dl
         real(dl) :: NewP5 = 0._dl
-        integer :: NewP6 = 0
+        integer  :: whichmodel = 0
         real(dl) :: pivot_scalar = 0.05_dl !pivot scales in Mpc^{-1}
         real(dl) :: pivot_tensor = 0.05_dl
         real(dl) :: As = 1._dl
@@ -148,19 +148,19 @@
 
     if (this%AmpOsc .ne. 0) then
 ! Linear oscillations
-                if (this%NewP6 == 1) then
+                if (this%whichmodel == 1) then
                         TInitialPowerLaw_ScalarPower = TInitialPowerLaw_ScalarPower * &
                 &       (1 + this%AmpOsc * cos(this%linfreq * exp(lnrat) +  const_twopi * this%phase))
 ! Logarithmic oscillations
-                else if (this%NewP6 == 2) then
+                else if (this%whichmodel == 2) then
                         TInitialPowerLaw_ScalarPower = TInitialPowerLaw_ScalarPower * &
                 &       (1 + this%AmpOsc * cos(this%linfreq * lnrat +  const_twopi * this%phase))
 ! Running logarithmic oscillations
-                else if (this%NewP6 == 3) then
+                else if (this%whichmodel == 3) then
                         TInitialPowerLaw_ScalarPower = TInitialPowerLaw_ScalarPower * &
                 &       (1 + this%AmpOsc * cos(this%linfreq * lnrat * (1 + this%NewP4 * lnrat) +  const_twopi * this%phase))
 ! Primoridial Standard Clocks (Expanding)
-                else if (this%NewP6 == 4) then
+                else if (this%whichmodel == 4) then
                         if (k/this%NewP4>=1) then ! k/k_*>1
                                TInitialPowerLaw_ScalarPower = TInitialPowerLaw_ScalarPower * &
                         &      (1 + this%AmpOsc * cos(this%linfreq * log(k) + const_twopi * this%phase))
@@ -168,7 +168,7 @@
                                 TInitialPowerLaw_ScalarPower = TInitialPowerLaw_ScalarPower
                         end if
 ! Primordial Standard Clocks (Contracting) effective frequency for Ekpyro
-                else if (this%NewP6 == 5) then
+                else if (this%whichmodel == 5) then
                         ! if (k/this%NewP4>=1 .and. this%NewP4*this%linfreq*(k/this%NewP4)**(1/this%NewP5-1)<10**4) then ! k/k_*>1 
                         if (k/this%NewP4<=1) then ! k/k_*<1
                                 TInitialPowerLaw_ScalarPower = TInitialPowerLaw_ScalarPower * &
@@ -177,7 +177,7 @@
                                 TInitialPowerLaw_ScalarPower = TInitialPowerLaw_ScalarPower
                         end if
 ! Primordial Standard Clocks (Contracting) effective frequency for Bounce
-                else if (this%NewP6 == 6) then
+                else if (this%whichmodel == 6) then
                         ! if (k/this%NewP4>=1 .and. this%NewP4*this%linfreq*(k/this%NewP4)**(1/this%NewP5-1)<10**4) then ! k/	k_*>1
                         if (k/this%NewP4<=1) then ! k/k_*<1
                                 TInitialPowerLaw_ScalarPower = TInitialPowerLaw_ScalarPower * &
@@ -185,10 +185,10 @@
                         else
                                 TInitialPowerLaw_ScalarPower = TInitialPowerLaw_ScalarPower
                         end if
-		else if (this%NewP6 == 0) then
+		else if (this%whichmodel == 0) then
 				TInitialPowerLaw_ScalarPower = TInitialPowerLaw_ScalarPower
                 else
-                        call MpiStop('Input parameter for NewP6 is not supported. Only 1-6 is supported. See test.ini')
+                        call MpiStop('Input parameter for whichmodel is not supported. Only 1-6 is supported. See test.ini')
 		end if
     end if
 
@@ -277,7 +277,7 @@
         this%phase = Ini%Read_Double(CompatKey(Ini,'phase_osc'))
         this%NewP4 = Ini%Read_Double(CompatKey(Ini,'NewP4'))
         this%NewP5 = Ini%Read_Double(CompatKey(Ini,'NewP5'))
-        this%NewP6 = Ini%Read_Int(CompatKey(Ini,'NewP6'))
+        this%whichmodel = Ini%Read_Int(CompatKey(Ini,'whichmodel'))
 
 
     call Ini%Read(CompatKey(Ini,'scalar_amp'),this%As)

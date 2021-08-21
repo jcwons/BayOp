@@ -229,9 +229,9 @@
 	call vdcdfnorm(size(Z),Z, cdf)
 
 	EI = (mu - YMax - xi) * cdf + std * pdf
-	if (Feedback > 1) Write(*,*) 'Maximal Value of EI is: ', MaxVal(EI)
+	if (Feedback > 0) Write(*,*) 'Maximal Value of EI is: ', MaxVal(EI)
 	if (Feedback > 1) Write(*,*) 'Maximal Improvment of Mu is: ', MaxVal(mu)-YMax
-	if (Feedback > 1)Write(*,*) 'Expected Improvement at this point is: ', EI(MAXLOC(mu,1))
+	if (Feedback > 1) Write(*,*) 'Expected Improvement at this point is: ', EI(MAXLOC(mu,1))
 	end subroutine TBayOptimisor_EI
 
 ! find maximumal expected improvement and returns next_X as position for the next measurement	
@@ -248,7 +248,7 @@
 	call this%EI(mu, YMax, std, xi, EI)
 	Location = MAXLOC(EI, 1)
 	next_X(1,:) = XPred(  Location, :)
-        Write(*,*) 'Expected Improvement at YMax is: ', XPred(MAXLOC(mu,1), :)
+        if (Feedback > 1) Write(*,*) 'Highest Ei is at: ', XPred(MAXLOC(mu,1), :)
 	end subroutine TBayOptimisor_propose
 	
 	
@@ -351,12 +351,12 @@
 		! Remove Grid points with low EI	
 		if (i>4*n_random .and. ABS(MaxVal(EI) - EI_previous) < 1.0_mcp) then	! Only remove points after having a decent amount of samples 
 				call this%RemoveGrid(XPred, EI, n_dim, Cutoff_EI)	! If therre is too much change in EI, don't remove points. Fit might be bad
-		else if (ABS(MaxVal(EI) - EI_previous) < 1.0_mcp) then			! Remove very bad points immediately
+		else if (i<2*n_random .and. ABS(MaxVal(EI) - EI_previous) < 1.0_mcp) then			! Remove very bad points immediately
 				call this%RemoveGrid(XPred, EI, n_dim, Cutoff_EI * 1e-50_mcp)
-		else if (i>2*n_random .and. ABS(MaxVal(EI) - EI_previous) < 1.0_mcp) then	! Gradually start removing points strictlier
-				call this%RemoveGrid(XPred, EI, n_dim, Cutoff_EI * 1e-15_mcp)
-		else if (i>3*n_random .and. ABS(MaxVal(EI) - EI_previous) < 1.0_mcp) then
-				call this%RemoveGrid(XPred, EI, n_dim, Cutoff_EI * 1e-5_mcp)
+		else if (i<3*n_random .and. ABS(MaxVal(EI) - EI_previous) < 1.0_mcp) then	! Gradually start removing points strictlier
+				call this%RemoveGrid(XPred, EI, n_dim, Cutoff_EI * 1e-30_mcp)
+		else if (i<4 *n_random .and. ABS(MaxVal(EI) - EI_previous) < 1.0_mcp) then
+				call this%RemoveGrid(XPred, EI, n_dim, Cutoff_EI * 1e-10_mcp)
 		end if		
 ! Update the Max_EI for the next run
 		EI_previous = MaxVal(EI)
@@ -370,13 +370,13 @@
 		! Finish loop
 		write(*,*) n_Grid-size(mu), 'out of', n_Grid, ' points have been removed from the grid'
 		call CPU_time(time4)
-		if (Feedback > 0) write(*,*) 'Time for one round of BayOp: ', time4-time0
+		if (Feedback > 1) write(*,*) 'Time for one round of BayOp: ', time4-time0
 		if (size(XPred,1)==0) exit	! End loop if there are no more points to sample
 		if (MAXVAL(EI)< 1e-20_mcp .and. EI_previous<1e-20) then
 			write(*,*) 'MAXVAL(EI)< 1e-20_mcp) ending BayOp before 500 samples'
 			exit
 		end if
-		if (Feedback > 1) call this%Memory(MemGB)
+		! if (Feedback > 1) call this%Memory(MemGB) ! If want to see memory use uncomment function in helper routine
 		j=i	! If loop finishes early, there will be empty entries in arrays. Integer j counts how many non-empty entries there are.
 	end do
 	! Get best point
@@ -402,12 +402,11 @@
 	integer :: n_Grid, ii, n_max, n_refine, ppos, i
 	
 	this%baseline = baseline ! Asign baseline value from .ini file to TBayOptimisor class variable
-	print*, this%baseline
+	print*, 'Baseline is: ', this%baseline
 	! Calls Initialise in HelperRoutines. This will generate the grid and allocate the parameter. Also decides which parameters are varied in BayOp (which_param)
 	call this%Initialise(Params, hypers, XData, XPred, XBest, YMax, n_iterations, which_param, n_input, input_dim, n_random, n_Grid, ii, n_max, n_refine, i)
 	
-!	xi=0.0_mcp ! This should be in .ini file
-!	Cutoff_EI=1e-5_mcp ! This should be in .ini file
+	print*, 'Cutoff_EI is:', Cutoff_EI
 	! This calls the main routine to start the Bayesian Optimisation. Including random samples, GPR, Bobyqa and EI
 	call this%BayOp(Params, XData, XPred, hypers, which_param, XBest, xi, Cutoff_EI, n_iterations, n_random, YMax, OutputName)
 	write(*,*) "Best fit point at:", XBest
