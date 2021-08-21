@@ -68,6 +68,7 @@
 	do i=1, input_dim
 		if (i == 1) then
 			K = amplitude * this%kernel(Reshape( XData(:,i), [size(YData)] ), Reshape( XData(:,i), [size(YData)] ), hypers(i))
+
 		else
 			K = K * this%kernel(Reshape( XData(:,i), [size(YData)] ), Reshape( XData(:,i), [size(YData)] ), hypers(i))
 		end if
@@ -121,7 +122,7 @@
 	integer :: i, j, n, npt
 
 	n = size(hypers)
-
+	print*, 'n is: ', n
 	do  i = 1,n ! asigning values to boundaries
 		xl (i) = bdl
 		xu (i) = bdu
@@ -134,7 +135,7 @@
 	end do
 	
 	npt = (n+1)*(n+2)/2 ! there are some conditions on this parameter, but no idea. Higher npt = more runs
-!	npt =  2*n + 1 ! This is most commonly used, but often made bobyqa end in local,non-global maximum
+!	npt =  n*(n+1)/2 ! This is most commonly used, but often made bobyqa end in local,non-global maximum
 	call this%Normalize_Y(Ydata, Ydata_norm, mean_norm, std_norm)
 
 	this%prior_amp = std_norm ! rescaling the hyper for the error to be of order 1
@@ -155,22 +156,23 @@
 			end if
 		end do
 	end if
-	call this%GPR(hypers, XData, YData_norm, XPred, alpha, mu, std, n_dim, YMax)
+	call this%GPR(hypers, XData, YData_norm, XPred, alpha, mu, std, n-1, YMax)
+	mu = mu + mean_norm
 	write(*,*) 'Best fit point is: ', MAXVAL(YData) 
 	contains 
 	
 	!Calculating the maximum likelihood of the data
-	function NegLogLike(hypers, XData, YData, XPred, n_dim) result(nll)
+	function NegLogLike(hypers, XData, YData, XPred, n) result(nll)
 	real(mcp) :: nll
 	real(mcp), intent(in) :: XData(:,:), YData(:), XPred(:,:)
 	real(mcp), intent(in) :: hypers(:)
-	integer, intent(in) :: n_dim
+	integer, intent(in) :: n
 	integer :: i
 	real(mcp) :: amplitude, Trace_L
 	real(mcp), dimension( size(YData),size(YData) ) :: K,L
 	
-	amplitude = (this%prior_amp  * hypers(n_dim + 1))**2
-	do i=1, n_dim
+	amplitude = (this%prior_amp*hypers(n))**2
+	do i=1, n-1
 		if (i == 1) then
 			K = amplitude * this%kernel(Reshape( XData(:,i), [size(YData)] ), Reshape( XData(:,i), [size(YData)] ), hypers(i))
 		else
@@ -199,7 +201,7 @@
 	real(mcp), dimension(:), intent(in) :: theta
 	real(mcp), intent(out) :: f
 	
-	f = NegLogLike(theta, XData, YData_norm, XPred, n_dim)
+	f = NegLogLike(theta, XData, YData_norm, XPred, n)
 	
 	
 	end subroutine calfun
@@ -389,62 +391,45 @@
 	subroutine TBayOptimisor_Sampler(this, Params, input_dim, n_random, use_refine, OutputName, baseline, xi, Cutoff_EI)
 	class(TBayOptimisor) :: this
 	Type(ParamSet) Params
-	real(mcp), allocatable, dimension(:) :: hypers
+	real(mcp), allocatable, dimension(:) :: hypers, YData, mu, std
 	real(mcp), allocatable, dimension(:,:) :: XData, XPred, XBest
 	real(mcp), intent(in) :: xi, Cutoff_EI, baseline
 	real(mcp) :: YMax, YMaxOld
-	integer, parameter :: n_iterations = 3000	! Hard coded maximum of number of iterations of BayOp. Should finish before 1000. Can be increased if necessary.
+	integer :: n_iterations
 	integer, allocatable, dimension(:) :: which_param, n_input ! I haven't figured out how CosmoMC understands which parameters are varied and which are constant. Doing this by hand.
 	integer, intent(in) :: input_dim 
 	integer, intent(inout) ::n_random
 	logical, intent(in) :: use_refine
 	character(len=*), intent(inout) :: OutputName
 	integer :: n_Grid, ii, n_max, n_refine, ppos, i
+	logical :: bobyyes = .TRUE.
 	
 	this%baseline = baseline ! Asign baseline value from .ini file to TBayOptimisor class variable
 	print*, 'Baseline is: ', this%baseline
 	! Calls Initialise in HelperRoutines. This will generate the grid and allocate the parameter. Also decides which parameters are varied in BayOp (which_param)
 	call this%Initialise(Params, hypers, XData, XPred, XBest, YMax, n_iterations, which_param, n_input, input_dim, n_random, n_Grid, ii, n_max, n_refine, i)
 	
-	print*, 'Cutoff_EI is:', Cutoff_EI
-	! This calls the main routine to start the Bayesian Optimisation. Including random samples, GPR, Bobyqa and EI
-	call this%BayOp(Params, XData, XPred, hypers, which_param, XBest, xi, Cutoff_EI, n_iterations, n_random, YMax, OutputName)
-	write(*,*) "Best fit point at:", XBest
-	write(*,*) "Likelihood at best fit:", YMax
-	
-	! Make refined search around maximum
-	if (use_refine) then
-		YMaxOld = YMax	! Save old value to compare later
-		n_refine = 5	! How much smaller should the new stepwidth be. Default is 1/5
-		n_refine = n_refine*4+1	! Refine grid is 4 steps around the maximum (2 right, 2 left)
-		deallocate(XPred)
-		allocate(XPred(n_refine**input_dim, input_dim))	! Allocate new Grid again
-		call this%Grid_refine(input_dim, n_refine, which_param, XBest, XPred)	! Create Grid around maximum
-		write(*,*) 'Parameter ranges are:'
-		do ii=1, input_dim
-			write(*,*) ii, XPred(1,ii), XPred(n_refine**ii,ii)
-		end do
+! Data
+	call this%FileLineNumber(n_iterations, OutputName)
+	print*, n_iterations
+	! allocate input parameter
+	if (allocated(XData)) deallocate(XData)
+	if (allocated(YData)) deallocate(YData)
+        if (allocated(hypers)) deallocate(hypers)
 
-		! Change output name to differentiate between before and refine
-		ppos = scan(trim(OutputName),".", BACK=.true.)					
-		if (ii > 0) OutputName = OutputName(1:ppos-1) // '_refine.txt'	
-		print*, 'New OutputName is', OutputName
-		call this%BayOp(Params, XData, XPred, hypers, which_param, XBest, xi, Cutoff_EI, n_iterations, n_random, YMax, OutputName) ! Call BayOp with new parameters
-		
-		write(*,*) "Best fit point at:", XBest
-		write(*,*) "Likelihood at best fit:", YMax
-		write(*,*) "Improvement due to refinement:", YMax-YMaxOld
-	end if
-	! Do some checks if best fit value is at prior boundary. If prior direction is split. This can be ignored. Otherwise there might be better fit outside the prior range
-	do i=1, input_dim
-		if (XBest(1,i) == BaseParams%Pmin(which_param(i))) then
-			write(*,*) 'Warning: Parameter', i, ' has best fit at prior boundary' 
-		                write(*,*) 'Consider extending the range'
-		else if (XBest(1,i) == BaseParams%PMax(which_param(i))) then
-			write(*,*) 'Warning: Parameter', i, ' has best fit at prior boundary'
-			write(*,*) 'Consider extending the range'
-		end if
-	end do
+	allocate(XData(n_iterations, input_dim)) ! need to assign the length of the input data to n_iterations
+	allocate(YData(n_iterations))
+	allocate(hypers(input_dim+1))
+	allocate(mu(n_Grid),std(n_Grid))
+
+	
+	call this%ReadInput(XData, YData, OutputName)	
+	
+	call this%Optimise(hypers, XData, YData, XPred, mu, std, n_iterations, bobyyes, YMax)
+
+	print*, MaxVal(mu)	
+	call this%PrintMu(XPred, mu, std, OutputName)	
+
 	end subroutine TBayOptimisor_Sampler
 	
 
