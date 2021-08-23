@@ -351,12 +351,12 @@
 		! Remove Grid points with low EI	
 		if (i>4*n_random .and. ABS(MaxVal(EI) - EI_previous) < 1.0_mcp) then	! Only remove points after having a decent amount of samples 
 				call this%RemoveGrid(XPred, EI, n_dim, Cutoff_EI)	! If therre is too much change in EI, don't remove points. Fit might be bad
-		else if (i<2*n_random .and. ABS(MaxVal(EI) - EI_previous) < 1.0_mcp) then			! Remove very bad points immediately
+		else if (i<2*n_random .and. ABS(MaxVal(EI) - EI_previous) < 1.0_mcp .and. i>1.5*n_random) then
 				call this%RemoveGrid(XPred, EI, n_dim, Cutoff_EI * 1e-50_mcp)
-		else if (i<3*n_random .and. ABS(MaxVal(EI) - EI_previous) < 1.0_mcp) then	! Gradually start removing points strictlier
+		else if (i<3*n_random .and. ABS(MaxVal(EI) - EI_previous) < 1.0_mcp .and. i>2*n_random) then	! Gradually start removing points strictlier
 				call this%RemoveGrid(XPred, EI, n_dim, Cutoff_EI * 1e-30_mcp)
-		else if (i<4 *n_random .and. ABS(MaxVal(EI) - EI_previous) < 1.0_mcp) then
-				call this%RemoveGrid(XPred, EI, n_dim, Cutoff_EI * 1e-10_mcp)
+		else if (i<4*n_random .and. ABS(MaxVal(EI) - EI_previous) < 1.0_mcp .and. i>3*n_random) then      
+                	        call this%RemoveGrid(XPred, EI, n_dim, Cutoff_EI * 1e-10_mcp)
 		end if		
 ! Update the Max_EI for the next run
 		EI_previous = MaxVal(EI)
@@ -366,6 +366,7 @@
 				
 		deallocate( mu, std, EI )
 		allocate( mu(size(XPred,1)), std(size(XPred,1)), EI(size(XPred,1))) ! allocate quantities for next run		
+ 		n_current = i ! Count number of samples taken		
 		
 		! Finish loop
 		write(*,*) n_Grid-size(mu), 'out of', n_Grid, ' points have been removed from the grid'
@@ -377,15 +378,16 @@
 			exit
 		end if
 		! if (Feedback > 1) call this%Memory(MemGB) ! If want to see memory use uncomment function in helper routine
-		n_current = i ! Count number of samples taken
 	end do
 	! Get best point
 	n_max = MAXLOC(YData(1:n_current),1) ! We need to restrict values from 1 to j, because 0 values are larger than the negative likelihood values
 	XBest(1,:) = XData(n_max, :) 
 	YMax = MAXVAL(YData(1:n_current))
-! If do_profile, then need to do a few clean up runs over the whole grid.
-! Some points we have removed might look promising with updated hyper parameters. This should only take a few runs
-! Profilelikelihood should be calculated quickly
+
+	print*, 'Finished BayOp with removing Grid'
+	! If do_profile, then need to do a few clean up runs over the whole grid.
+	! Some points we have removed might look promising with updated hyper parameters. This should only take a few runs
+	! Profilelikelihood should be calculated quickly
 
 	if (do_profile) then
 		bobyyes = .FALSE. ! We do not want to update the hypers just do a clean up
@@ -397,12 +399,15 @@
 
 		do i=j,j+50
 			write(*,*) 'Getting Sample Number:', i
+			allocate(YData_loop(i-1))
 			allocate(XData_loop(i-1, n_dim))
 			YData_loop(1:i-1) = YData(1:i-1)
 			do ii=1, n_dim
 				XData_loop(1:i-1, ii) = XData(1:i-1, ii)
 			end do
+			print*,2
 			call this%Optimise(hypers, XData_loop, YData_loop, XPred_profile, mu, std, n_dim, bobyyes, YMax) ! only need GPR actually
+			print*,3
 			deallocate(YData_loop, XData_loop)
 			! Get next data point
 			call this%propose(mu, YMax, std, xi, XPred_profile ,next_X, Ei)
