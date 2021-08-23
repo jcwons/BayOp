@@ -33,6 +33,7 @@
 	procedure :: SolvMat => THelperRoutines_SolvMat
 	procedure :: Normalize_Y => THelperRoutines_Normalize_Y 
 	procedure :: CreateOutput => THelperRoutines_CreateOutput
+	procedure :: OutputProfile => THelperRoutines_OutputProfile
 	procedure :: RemoveData => THelperRoutines_RemoveData
 	procedure :: normal_pdf => THelperRoutines_normal_pdf
 	procedure :: RemoveGrid => THelperRoutines_RemoveGrid
@@ -482,18 +483,43 @@
 
 	end subroutine THelperRoutines_Normalize_Y
 
-! Creates output file for 5 parameters
-	subroutine THelperRoutines_CreateOutput(this, array1, array2, array3, array4, array5, array6, text)
+! Creates output file for 3-5 dimensional array1 and 1D array2
+	subroutine THelperRoutines_CreateOutput(this, array1, array2, text)
 	class(THelperRoutines) :: this
 	integer :: i
-	real(mcp), intent(in) :: array1(:), array2(:), array3(:), array4(:), array5(:), array6(:)
+	real(mcp), intent(in) :: array1(:,:), array2(:)
 	character(len =*) :: text
 	open(1, file=text)
-	do i=1,size(array1)
-		write(1,'(6E15.5)') array1(i), array2(i), array3(i), array4(i), array5(i), array6(i)
+	do i=1, size(array2)
+		if (size(array1,2)==3) then
+			write(1,'(6E15.5)') array1(i,1), array1(i,2), array1(i,3), array2(i)
+		else if (size(array1,2)==4) then
+			write(1,'(6E15.5)') array1(i,1), array1(i,2), array1(i,3), array1(4,i), array2(i)
+		else if (size(array1,2)==5) then
+			write(1,'(6E15.5)') array1(i,1), array1(i,2), array1(i,3), array1(i,4), array1(i,5), array2(i)
+		end if
 	end do
 	close(1)
 	end subroutine THelperRoutines_CreateOutput
+
+! Creates output file for 3-5 dimensional array1 and 1D array2, array3
+        subroutine THelperRoutines_OutputProfile(this, array1, array2, array3, text)
+        class(THelperRoutines) :: this
+        integer :: i
+        real(mcp), intent(in) :: array1(:,:), array2(:), array3(:)
+        character(len =*) :: text
+        open(1, file=text)
+        do i=1, size(array2)
+                if (size(array1,2)==3) then
+                        write(1,'(6E15.5)') array1(i,1), array1(i,2), array1(i,3), array2(i), array3(i)
+                else if (size(array1,2)==4) then
+                        write(1,'(6E15.5)') array1(i,1), array1(i,2), array1(i,3), array1(4,i), array2(i), array3(i)
+                else if (size(array1,2)==5) then
+                        write(1,'(6E15.5)') array1(i,1), array1(i,2), array1(i,3), array1(i,4), array1(i,5), array2(i), array3(i)
+                end if
+        end do
+        close(1)
+        end subroutine THelperRoutines_OutputProfile
 
 ! Remove Sampled point from Grid
 	subroutine THelperRoutines_RemoveData(this, XPred, n, input_dim)
