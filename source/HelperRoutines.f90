@@ -18,7 +18,6 @@
 !	real(mcp) :: baseline = -1184.788_mcp	! For the test likelihood
 	real(mcp) :: baseline 
 	contains
-	procedure :: FileLineNumber => THelperRoutines_FileLineNumber
 	procedure :: Initialise => THelperRoutines_Initialise
 !	procedure :: Memory => THelperRoutines_Memory ! Memory function for testing
 	procedure :: Linspace => THelperRoutines_Linspace
@@ -34,12 +33,7 @@
 	procedure :: SolvMat => THelperRoutines_SolvMat
 	procedure :: Normalize_Y => THelperRoutines_Normalize_Y 
 	procedure :: CreateOutput => THelperRoutines_CreateOutput
-<<<<<<< HEAD
-	procedure :: ReadInput => THelperRoutines_ReadInput
-	procedure :: PrintMu => THelperRoutines_PrintMu
-=======
 	procedure :: OutputProfile => THelperRoutines_OutputProfile
->>>>>>> temporary
 	procedure :: RemoveData => THelperRoutines_RemoveData
 	procedure :: normal_pdf => THelperRoutines_normal_pdf
 	procedure :: RemoveGrid => THelperRoutines_RemoveGrid
@@ -50,23 +44,6 @@
 !*****************************************************************************************
 !>	THelperRoutines
 
-	subroutine THelperRoutines_FileLineNumber(this, n_lines, text)
-	class(THelperRoutines) :: this
-	integer, intent(inout) :: n_lines
-	character(len =*) :: text
-
-	n_lines = 0 
-	OPEN (1, file = text) 
-	DO 
-	    READ (1,'(6E15.5)', END=10) 
-	    n_lines = n_lines + 1 
-	END DO 
-	10 CLOSE (1) 
-
-	print*, n_lines
-
-	end subroutine THelperRoutines_FileLineNumber
-	
 ! Initialise BayOp. Get dimensions for quanitites, get grid, print some information
 	subroutine THelperRoutines_Initialise(this, Params, hypers, XData, XPred, XBest, YMax, n_iterations, which_param, n_input, input_dim, n_random, n_Grid, ii, n_max, n_refine, i)
 	class(THelperRoutines) :: this
@@ -525,44 +502,6 @@
 	close(1)
 	end subroutine THelperRoutines_CreateOutput
 
-<<<<<<< HEAD
-! Creates output file for 5 parameters
-        subroutine THelperRoutines_ReadInput(this, array1, array2,  text)
-        class(THelperRoutines) :: this
-        integer :: i
-        real(mcp), intent(inout) :: array1(:,:), array2(:)
-        character(len =*) :: text
-        open(1, file=text)
-        do i=1,size(array2)
-                read(1,'(6E15.5)') array1(i,1), array1(i,2), array2(i), array1(i,3)
-        end do
-        close(1)
-        end subroutine THelperRoutines_ReadInput
-
-! Creates output file for 5 parameter
-        subroutine THelperRoutines_PrintMu(this, array1, array2, array3,  text)
-        class(THelperRoutines) :: this
-        integer :: i
-        real(mcp), intent(inout) :: array1(:,:), array2(:), array3(:)
-        character(len =*) :: text
-        open(1, file="mu_"//text)
-	if (size(array1,2)==3) then
-	        do i=1,size(array2)
-        	        write(1,'(6E15.5)') array1(i,1), array1(i,2), array1(i,3), array2(i), array3(i)
-        	end do
-	else if (size(array1,2)==4) then
-                do i=1,size(array2)
-                        write(1,'(6E15.5)') array1(i,1), array1(i,2), array1(i,3), array1(i,4), array2(i), array3(i)
-                end do
-        else if (size(array1,2)==5) then
-                do i=1,size(array2)
-                        write(1,'(6E15.5)') array1(i,1), array1(i,2), array1(i,3), array1(i,4), array1(i,5), array2(i), array3(i)
-                end do
-	end if	
-        close(1)
-        end subroutine THelperRoutines_PrintMu
-
-=======
 ! Creates output file for 3-5 dimensional array1 and 1D array2, array3
         subroutine THelperRoutines_OutputProfile(this, array1, array2, array3, text)
         class(THelperRoutines) :: this
@@ -581,7 +520,6 @@
         end do
         close(1)
         end subroutine THelperRoutines_OutputProfile
->>>>>>> temporary
 
 ! Remove Sampled point from Grid
 	subroutine THelperRoutines_RemoveData(this, XPred, n, input_dim)
