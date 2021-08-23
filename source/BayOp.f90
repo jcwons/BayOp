@@ -156,8 +156,13 @@
 			end if
 		end do
 	end if
+<<<<<<< HEAD
 	call this%GPR(hypers, XData, YData_norm, XPred, alpha, mu, std, n-1, YMax)
 	mu = mu + mean_norm
+=======
+	call this%GPR(hypers, XData, YData_norm, XPred, alpha, mu, std, n_dim, YMax)
+	mu = mu + mean_norm ! remove normalisation of mu for printing later	
+>>>>>>> temporary
 	write(*,*) 'Best fit point is: ', MAXVAL(YData) 
 	contains 
 	
@@ -255,7 +260,7 @@
 	
 	
 ! Routine generates random samples and then iterates over GPR+EI for n_iterations or when finished
-	subroutine TBayOptimisor_BayOp(this, Params, XData, XPred, hypers, which_param, XBest, xi, Cutoff_EI, n_iterations, n_random, YMax, OutputName)
+	subroutine TBayOptimisor_BayOp(this, Params, XData, XPred, hypers, which_param, XBest, xi, Cutoff_EI, n_iterations, n_random, YMax, OutputName, do_profile)
 	class(TBayOptimisor) :: this
 	Type(ParamSet) Params
 	real(mcp), intent(inout), allocatable :: XData(:,:), XPred(:,:), XBest(:,:), hypers(:)
@@ -263,18 +268,23 @@
 	real(mcp), intent(inout) :: YMax
 	integer, intent(in) :: n_iterations, n_random, which_param(:)
 	character(len=*), intent(inout) :: OutputName
-	!character(len=40) :: PredOutput	! Option to print mu and std in every run. Might implement at some point with logical in .ini
+	character(len=40) :: OutputProfile	! Option to print mu and std in every run. Might implement at some point with logical in .ini
 	real(mcp), allocatable, dimension(:) :: Ydata, YData_loop, mu, std, Ei
-	real(mcp), allocatable :: XData_loop(:,:), Next_X(:,:)
+	real(mcp), allocatable :: XData_loop(:,:), Next_X(:,:), XPred_profile(:,:)
+	logical, intent(in) :: do_profile
 	logical :: bobyyes = .True.
-	integer :: MemGB, n_Grid, n_dim, n_max, i, ii, j, ppos, jj 
+	integer :: MemGB, n_Grid, n_dim, n_max, i, ii, j, ppos, jj, n_current
 	real(mcp) :: EI_previous, time0, time1, time2, time3, time4, meanY, stdY
 			
 	n_Grid = size(XPred, 1)
 	n_dim = size(XPred, 2)
 	EI_previous = 0	! will be changed after every run
 	allocate(YData(n_iterations))
-	
+
+	! Make a copy of the Grid in case we run profile	
+	allocate(XPred_profile(n_Grid, n_dim))
+	XPred_profile = XPred
+
 	call this%RandomSample(Params, n_random, n_Grid, XPred, XData, YData, which_param)
 	
 	allocate(next_X(1,n_dim))
@@ -296,13 +306,7 @@
 			XData_loop(1:i-1, ii) = XData(1:i-1, ii)
 		end do
 		! write results to output file HERE I SHOULD USE THE PRINTMU FUNCTION IN THE PROFILE LIKELIHOOD TO MAKE THIS NICER
-		if (n_dim == 3) then
-			call this%CreateOutput(XData_loop(:,1), XData_loop(:,2), YData_loop, XData_loop(:,3), XData_loop(:,3), XData_loop(:,3), OutputName)
-		else if (n_dim == 4) then
-			call this%CreateOutput(XData_loop(:,1), XData_loop(:,2), YData_loop, XData_loop(:,3), XData_loop(:,4), XData_loop(:,4), OutputName)
-		else if (n_dim == 5) then
-			call this%CreateOutput(XData_loop(:,1), XData_loop(:,2), YData_loop, XData_loop(:,3), XData_loop(:,4), XData_loop(:,5), OutputName)
-		end if
+		call this%CreateOutput(XData_loop, YData_loop, OutputName)
 		call CPU_time(time1)
 		jj=i-n_random
 		! Some checks when to update hyperparameters
@@ -379,16 +383,76 @@
 			exit
 		end if
 		! if (Feedback > 1) call this%Memory(MemGB) ! If want to see memory use uncomment function in helper routine
-		j=i	! If loop finishes early, there will be empty entries in arrays. Integer j counts how many non-empty entries there are.
+		n_current = i ! Count number of samples taken
 	end do
 	! Get best point
-	n_max = MAXLOC(YData(1:j),1) ! We need to restrict values from 1 to j, because 0 values are larger than the negative likelihood values
+	n_max = MAXLOC(YData(1:n_current),1) ! We need to restrict values from 1 to j, because 0 values are larger than the negative likelihood values
 	XBest(1,:) = XData(n_max, :) 
-	YMax = MAXVAL(YData(1:j))
+	YMax = MAXVAL(YData(1:n_current))
+! If do_profile, then need to do a few clean up runs over the whole grid.
+! Some points we have removed might look promising with updated hyper parameters. This should only take a few runs
+! Profilelikelihood should be calculated quickly
+
+	if (do_profile) then
+		bobyyes = .FALSE. ! We do not want to update the hypers just do a clean up
+		if (allocated(mu)) deallocate(mu)
+		if (allocated(std)) deallocate(std)
+		if (allocated(EI)) deallocate(EI)
+		allocate( mu(size(XPred_profile,1)), std(size(XPred_profile,1)), EI(size(XPred_profile,1))) ! allocate quantities for next run		
+		j = n_current+1 ! This will be start value for next loop
+
+		do i=j,j+50
+			write(*,*) 'Getting Sample Number:', i
+			allocate(XData_loop(i-1, n_dim))
+			YData_loop(1:i-1) = YData(1:i-1)
+			do ii=1, n_dim
+				XData_loop(1:i-1, ii) = XData(1:i-1, ii)
+			end do
+			call this%Optimise(hypers, XData_loop, YData_loop, XPred_profile, mu, std, n_dim, bobyyes, YMax) ! only need GPR actually
+			deallocate(YData_loop, XData_loop)
+			! Get next data point
+			call this%propose(mu, YMax, std, xi, XPred_profile ,next_X, Ei)
+        	        ! Add next data point 
+			do ii=1, n_dim
+                	        XData(i,ii) = next_X(1,ii)
+                        	Params%P(which_param(ii)) = next_X(1,ii) ! Change parameters for sampling
+                	end do		
+			write(*,*) 'Sampling the likelihood at:', next_X
+			! Sample Data	
+			YData(i) = this%LogLike(Params)
+			! For some feature models CAMB fails and returns -1e31 for the likelihood. This turns the value into a bad point one std below the mean. Otherwise GPR does not work with the -1e31 outlier
+			if (YData(i) < -1e10) then
+				meanY = sum(Ydata(1:i-1))/(i-1)
+				stdY = SUM(Ydata(1:i-1)**2) / (i-2)
+				stdY = SQRT(stdY)
+				YData(i) = meanY - stdY
+				if (YData(i)>0.0) then
+					YData(i)=-5
+				end if
+			end if
+		
+			if (MAXVAL(EI)< 1e-5_mcp) then
+				write(*,*) 'Clean up done. Profilelikelihood will be printed'
+				exit
+			end if
+		end do
+		ppos = scan(trim(OutputName),".", BACK=.true.)					
+		OutputProfile = OutputName(1:ppos-1) // '_profile.txt'	
+		print*, 'New OutputName for profile:', OutputProfile
+		call this%OutputProfile(XPred, mu, std, OutputProfile)
+		end if
+
+
+
+
+
+
+
+
 	end subroutine TBayOptimisor_BayOp
 	
 	! Master routine for this module
-	subroutine TBayOptimisor_Sampler(this, Params, input_dim, n_random, use_refine, OutputName, baseline, xi, Cutoff_EI)
+	subroutine TBayOptimisor_Sampler(this, Params, input_dim, n_random, do_profile, use_refine, OutputName, baseline, xi, Cutoff_EI)
 	class(TBayOptimisor) :: this
 	Type(ParamSet) Params
 	real(mcp), allocatable, dimension(:) :: hypers, YData, mu, std
@@ -399,7 +463,7 @@
 	integer, allocatable, dimension(:) :: which_param, n_input ! I haven't figured out how CosmoMC understands which parameters are varied and which are constant. Doing this by hand.
 	integer, intent(in) :: input_dim 
 	integer, intent(inout) ::n_random
-	logical, intent(in) :: use_refine
+	logical, intent(in) :: use_refine, do_profile
 	character(len=*), intent(inout) :: OutputName
 	integer :: n_Grid, ii, n_max, n_refine, ppos, i
 	logical :: bobyyes = .TRUE.
@@ -409,6 +473,7 @@
 	! Calls Initialise in HelperRoutines. This will generate the grid and allocate the parameter. Also decides which parameters are varied in BayOp (which_param)
 	call this%Initialise(Params, hypers, XData, XPred, XBest, YMax, n_iterations, which_param, n_input, input_dim, n_random, n_Grid, ii, n_max, n_refine, i)
 	
+<<<<<<< HEAD
 ! Data
 	call this%FileLineNumber(n_iterations, OutputName)
 	print*, n_iterations
@@ -422,6 +487,13 @@
 	allocate(hypers(input_dim+1))
 	allocate(mu(n_Grid),std(n_Grid))
 
+=======
+	print*, 'Cutoff_EI is:', Cutoff_EI
+	! This calls the main routine to start the Bayesian Optimisation. Including random samples, GPR, Bobyqa and EI
+	call this%BayOp(Params, XData, XPred, hypers, which_param, XBest, xi, Cutoff_EI, n_iterations, n_random, YMax, OutputName, do_profile)
+	write(*,*) "Best fit point at:", XBest
+	write(*,*) "Likelihood at best fit:", YMax
+>>>>>>> temporary
 	
 	call this%ReadInput(XData, YData, OutputName)	
 	
@@ -430,6 +502,29 @@
 	print*, MaxVal(mu)	
 	call this%PrintMu(XPred, mu, std, OutputName)	
 
+<<<<<<< HEAD
+=======
+		! Change output name to differentiate between before and refine
+		ppos = scan(trim(OutputName),".", BACK=.true.)					
+		if (ii > 0) OutputName = OutputName(1:ppos-1) // '_refine.txt'	
+		print*, 'New OutputName is', OutputName
+		call this%BayOp(Params, XData, XPred, hypers, which_param, XBest, xi, Cutoff_EI, n_iterations, n_random, YMax, OutputName, do_profile) ! Call BayOp with new parameters
+		
+		write(*,*) "Best fit point at:", XBest
+		write(*,*) "Likelihood at best fit:", YMax
+		write(*,*) "Improvement due to refinement:", YMax-YMaxOld
+	end if
+	! Do some checks if best fit value is at prior boundary. If prior direction is split. This can be ignored. Otherwise there might be better fit outside the prior range
+	do i=1, input_dim
+		if (XBest(1,i) == BaseParams%Pmin(which_param(i))) then
+			write(*,*) 'Warning: Parameter', i, ' has best fit at prior boundary' 
+		                write(*,*) 'Consider extending the range'
+		else if (XBest(1,i) == BaseParams%PMax(which_param(i))) then
+			write(*,*) 'Warning: Parameter', i, ' has best fit at prior boundary'
+			write(*,*) 'Consider extending the range'
+		end if
+	end do
+>>>>>>> temporary
 	end subroutine TBayOptimisor_Sampler
 	
 
