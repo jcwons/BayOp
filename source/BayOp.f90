@@ -265,6 +265,7 @@
 	real(mcp), allocatable, dimension(:) :: Ydata, YData_loop, mu, std, Ei
 	real(mcp), allocatable :: XData_loop(:,:), Next_X(:,:), XPred_profile(:,:)
 	logical :: bobyyes = .True.
+	logical :: terminate
 	logical, intent(in) :: do_profile
 	integer :: MemGB, n_Grid, n_dim, n_max, i, ii, j, ppos, jj 
 	real(mcp) :: EI_previous, time0, time1, time2, time3, time4, meanY, stdY
@@ -315,6 +316,7 @@
 			bobyyes = .False.
 		end if
 		! Update hyperparameters(if bobyyes=T) + GPR
+		! Note that after this%Optimise we are working with mu and Ymax normalised
 		call this%Optimise(hypers, XData_loop, YData_loop, XPred, mu, std, n_dim, bobyyes, YMax)
 		!call this%CreateOutput(XPred(:,1), XPred(:,2), mu, PredOutput)                
   		
@@ -322,7 +324,7 @@
 
 		call CPU_time(time2)
 		if (Feedback > 1) write(*,*) 'Time to propose with to bobyqa+GPR: ', time2-time0
-		! Use EI to find next best point
+		! Use EI to find next best point ! YMax and mu are normalised
 		call this%propose(mu, YMax, std, xi, XPred ,next_X, Ei) 
 		call CPU_time(time3)
 		if (Feedback > 1) write(*,*) 'Time to propose with BayOp: ', time3-time2
@@ -351,9 +353,9 @@
 		else if (i<2*n_random .and. ABS(MaxVal(EI) - EI_previous) < 1.0_mcp) then			! Remove very bad points immediately
 				call this%RemoveGrid(XPred, EI, n_dim, Cutoff_EI * 1e-50_mcp)
 		else if (i<3*n_random .and. ABS(MaxVal(EI) - EI_previous) < 1.0_mcp) then	! Gradually start removing points strictlier
-				call this%RemoveGrid(XPred, EI, n_dim, Cutoff_EI * 1e-30_mcp)
+				call this%RemoveGrid(XPred, EI, n_dim, Cutoff_EI * 1e-15_mcp)
 		else if (i<4 *n_random .and. ABS(MaxVal(EI) - EI_previous) < 1.0_mcp) then
-				call this%RemoveGrid(XPred, EI, n_dim, Cutoff_EI * 1e-10_mcp)
+				call this%RemoveGrid(XPred, EI, n_dim, Cutoff_EI * 1e-5_mcp)
 		end if		
 ! Update the Max_EI for the next run
 		EI_previous = MaxVal(EI)
@@ -391,7 +393,7 @@
 		allocate( mu(size(XPred_profile,1)), std(size(XPred_profile,1)), EI(size(XPred_profile,1))) ! allocate quantities for next run		
 		j = j+1 ! This will be start value for next loop
 
-		do i=j,j+50
+		do i=j,j+n_random
 			jj = i !count number of samples
 			write(*,*) 'Cleanup: Getting Sample Number:', i
 			allocate(YData_loop(i-1))
@@ -402,18 +404,11 @@
 			end do
 			call this%Optimise(hypers, XData_loop, YData_loop, XPred_profile, mu, std, n_dim, bobyyes, YMax) ! only need GPR actually
 	                call this%CreateOutput(XData_loop, YData_loop, OutputName)
+			meanY = sum(Ydata_loop)/(i-1) ! Normally we only use normalised mu
 			deallocate(YData_loop, XData_loop)
 			! Get next data point
 			call this%propose(mu, YMax, std, xi, XPred_profile ,next_X, Ei)
 				
-			! Check if this point has already been sampled
-                        if (any(next_X == XData)) then
-				write(*,*) 'Sampling the likelihood at:', next_X
-                                print*,'Point has already been sampled'
-                                print*,'Clean up done'
-                                exit
-                        end if
-
         	        ! Add next data point 
 			do ii=1, n_dim
                 	        XData(i,ii) = next_X(1,ii)
@@ -435,12 +430,13 @@
 				end if
 			end if
 			
-			if (MAXVAL(EI)< 1e-5_mcp) then
+			if (MAXVAL(EI)< 1e-3_mcp) then
 				write(*,*) 'Clean up done. Profilelikelihood will be printed'
 				exit
 			end if
-		mu = mu + meanY ! remove normalisation of mu for output
+
 		end do
+		mu = mu + meanY ! Remove normalisation of mu for printing
 		ppos = scan(trim(OutputName),".", BACK=.true.)					
 		OutputProfile = OutputName(1:ppos-1) // '_profile.txt'	
 		print*, 'New OutputName for profile:', OutputProfile
@@ -482,6 +478,7 @@
 	
 	! Make refined search around maximum
 	if (use_refine) then
+		n_random = n_random/3 ! less points are needed because function is rather convex in refine area
 		YMaxOld = YMax	! Save old value to compare later
 		n_refine = 5	! How much smaller should the new stepwidth be. Default is 1/5
 		n_refine = n_refine*4+1	! Refine grid is 4 steps around the maximum (2 right, 2 left)
