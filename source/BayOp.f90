@@ -121,7 +121,6 @@
 	integer :: i, j, n, npt
 
 	n = size(hypers)
-
 	do  i = 1,n ! asigning values to boundaries
 		xl (i) = bdl
 		xu (i) = bdu
@@ -136,7 +135,6 @@
 	npt = (n+1)*(n+2)/2 ! there are some conditions on this parameter, but no idea. Higher npt = more runs
 !	npt =  2*n + 1 ! This is most commonly used, but often made bobyqa end in local,non-global maximum
 	call this%Normalize_Y(Ydata, Ydata_norm, mean_norm, std_norm)
-
 	this%prior_amp = std_norm ! rescaling the hyper for the error to be of order 1
 	if (bobyyes) then
 		call BOBYQA(n, npt, hypers, xl, xu, rhobeg, rhoend, iprint, maxfun, calfun)
@@ -169,7 +167,7 @@
 	real(mcp) :: amplitude, Trace_L
 	real(mcp), dimension( size(YData),size(YData) ) :: K,L
 	
-	amplitude = (this%prior_amp  * hypers(n_dim + 1))**2
+	amplitude = (this%prior_amp * hypers(n_dim+1))**2
 	do i=1, n_dim
 		if (i == 1) then
 			K = amplitude * this%kernel(Reshape( XData(:,i), [size(YData)] ), Reshape( XData(:,i), [size(YData)] ), hypers(i))
@@ -417,7 +415,6 @@
 			write(*,*) 'Sampling the likelihood at:', next_X
 			! Sample Data	
 			YData(i) = this%LogLike(Params)
-			write(*,*) 'Likelihood is:', YData(i)
 
 			! For some feature models CAMB fails and returns -1e31 for the likelihood. This turns the value into a bad point one std below the mean. Otherwise GPR does not work with the -1e31 outlier
 			if (YData(i) < -1e10) then
@@ -429,7 +426,7 @@
 					YData(i)=-5
 				end if
 			end if
-			
+			write(*,*) 'Likelihood is:', YData(i)			
 			if (MAXVAL(EI)< 1e-3_mcp) then
 				write(*,*) 'Clean up done. Profilelikelihood will be printed'
 				exit

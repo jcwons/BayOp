@@ -318,39 +318,26 @@
 	real(mcp), intent(inout), allocatable :: XPred(:,:), XData(:,:), YData(:)
 	real(mcp) :: rng, mean, std
 	integer, intent(in) :: n_Grid, n_random, which_param(:) ! no need for n_Grid
-	integer :: i, k , ii
+	integer :: i, k , ii, iii
 	
 
 	write(*,*) 'Taking', n_random,  'random samples from the Grid before starting the Baysian Optimisation'
 	do i=1, n_random
 		print*,i
+	! For bad fits CAMB returns errors sometimes. In this case, we just rerun rng
+		do iii=1,10
 	! Create random number between 1 and n_Grid
-		call RANDOM_NUMBER(rng) ! gives random number between 1 and 0
-		k = FLOOR(size(XPred,1)*rng) + 1
-		XData(i,:) = XPred(k,:)
+			call RANDOM_NUMBER(rng) ! gives random number between 1 and 0
+			k = FLOOR(size(XPred,1)*rng) + 1
+			XData(i,:) = XPred(k,:)
 	! Calculate likelihood at random point k
-		do ii=1, size(which_param)
-			Params%P(which_param(ii))=XData(i,ii)
+			do ii=1, size(which_param)
+				Params%P(which_param(ii))=XData(i,ii)
+			end do
+			YData(i) = this%LogLike(Params)
+			if (YData(i) > -1e20) exit			
 		end do
-		YData(i) = this%LogLike(Params)
 		call this%RemoveData(XPred, k, size(which_param))
-		if (YData(i) < -1e10) then
-			if (i==1) then
-				mean = 0
-				std = 0
-			else if (i==2) then
-				mean = sum(Ydata(1:i-1))/(i-1)
-				std = 0
-			else
-				mean = sum(Ydata(1:i-1))/(i-1)
-				std = SUM(Ydata(1:i-1)**2) / (i-2)
-			end if
-			std = SQRT(std)
-			YData(i) = mean - std
-			if (YData(i)>0.0) then
-				YData(i)=-5
-			end if
-		end if 
                 if (Feedback>0) then
                         write(*,*) 'Sampling Likelihood at:', XData(i,:)
                         write(*,*) 'Likelihood is:', Ydata(i)
@@ -494,7 +481,7 @@
 		if (size(array1,2)==3) then
 			write(1,'(6E15.5)') array1(i,1), array1(i,2), array1(i,3), array2(i)
 		else if (size(array1,2)==4) then
-			write(1,'(6E15.5)') array1(i,1), array1(i,2), array1(i,3), array1(4,i), array2(i)
+			write(1,'(6E15.5)') array1(i,1), array1(i,2), array1(i,3), array1(i,4), array2(i)
 		else if (size(array1,2)==5) then
 			write(1,'(6E15.5)') array1(i,1), array1(i,2), array1(i,3), array1(i,4), array1(i,5), array2(i)
 		end if
@@ -513,7 +500,7 @@
                 if (size(array1,2)==3) then
                         write(1,'(6E15.5)') array1(i,1), array1(i,2), array1(i,3), array2(i), array3(i)
                 else if (size(array1,2)==4) then
-                        write(1,'(6E15.5)') array1(i,1), array1(i,2), array1(i,3), array1(4,i), array2(i), array3(i)
+                        write(1,'(6E15.5)') array1(i,1), array1(i,2), array1(i,3), array1(i,4), array2(i), array3(i)
                 else if (size(array1,2)==5) then
                         write(1,'(6E15.5)') array1(i,1), array1(i,2), array1(i,3), array1(i,4), array1(i,5), array2(i), array3(i)
                 end if
