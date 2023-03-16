@@ -11,7 +11,7 @@
 
     integer, parameter :: As_index=1, ns_index =2, nrun_index=3, nrunrun_index=4, amp_ratio_index = 5, &
         & nt_index= 6, ntrun_index = 7, Aphiphi_index = 8, &
-	& AmpOsc_index = 9, linfreq_index = 10, phase_index = 11, newP4_index = 12, newP5_index = 13, &
+	& feat_amp_index = 9, feat_freq_index = 10, feat_phase_index = 11, P4_index = 12, P5_index = 13, &
 	& whichmodel_index = 14, last_power_index = whichmodel_index ! Added new parameters
 
     integer, parameter :: max_inipower_params = 16

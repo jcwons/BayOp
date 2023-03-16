@@ -1,11 +1,15 @@
+    ! Additional routines used for during BayOp. Mostly simple routines to do some
+    ! array manipulations or Output routines
+    ! 
+	! Also includes a few MKL routines to solve linear equations
+	! At the moment DPOTRF is used to get the cholesky decomposition
+	!
+	! DGESV is used to solve linear equation
+	! This assumes a general symmetric matrix, but we actually use cholesky decomposed matrix
+	! DGESV first does a cholesky decomposition, could save this step by using another
+	! algorithm, but couldn't find the suitable one.
+	
 	module HelperRoutines
-! In this module all the routine that are needed for running the code are in. This contain linear algebra functions using LAPACK,
-! as well as simple functions to create the grid and some other statistic functions. There is no hard coding in here.
-! Only if you want to change the routines used to solve the linear equations. Otherwise changes should all be done in BayOp.f90
-! DPOTRF is used for the Cholesky decomposition
-! DGESV is used to solve the linear equation. (Note that this is not the most efficient method, 
-! but doesn't really matter and I was too lazy to change)
-
 	use CalcLike
 	use ParamPointSet
     	implicit none
@@ -13,9 +17,6 @@
 
 	Type, extends(TLikelihoodUser) :: THelperRoutines
 	real(mcp) :: const_pi = 3.1415926535897932384626433832795_mcp
-!	real(mcp) :: baseline = -12272.602152412439_mcp	! Planck TTTEE, simall, low-EE
-!        real(mcp) :: baseline = -12277.05138222037_mcp  ! TTTEE + lensing
-!	real(mcp) :: baseline = -1184.788_mcp	! For the test likelihood
 	real(mcp) :: baseline 
 	contains
 	procedure :: Initialise => THelperRoutines_Initialise
@@ -44,7 +45,6 @@
 !*****************************************************************************************
 !>	THelperRoutines
 
-! Initialise BayOp. Get dimensions for quanitites, get grid, print some information
 	subroutine THelperRoutines_Initialise(this, Params, hypers, XData, XPred, XBest, YMax, n_iterations, which_param, n_input, input_dim, n_random, n_Grid, ii, n_max, n_refine, i)
 	class(THelperRoutines) :: this
 	Type(ParamSet) Params
@@ -52,20 +52,24 @@
 	real(mcp), intent(inout), allocatable, dimension(:,:) :: XData, XPred, XBest
 	real(mcp), intent(inout) ::  YMax
 	integer, intent(in) :: n_iterations 
-	integer, intent(inout), allocatable, dimension(:) :: which_param, n_input ! Parameter varied, 17 = As
+	integer, intent(inout), allocatable, dimension(:) :: which_param, n_input 
 	integer, intent(in) :: input_dim 
 	integer, intent(inout) ::n_random
 	integer, intent(inout) :: n_Grid, ii, n_max, n_refine, i
+	! Initialise BayOp. Get dimensions for quanitites, get grid, print some information
+	! Routine is called at the beginning before getting random samples
 
 
 	allocate( which_param(input_dim))
 	allocate( n_input(input_dim) )
-		
+	
+	! create grid with parameters
+	! 25 = AmpOsc, 26 = linfreq, 27 = phase, 28 = NewP4, 29 = NewP5
 	write(*,*) 'Number of parameters sampled over: ', input_dim
 	if (input_dim == 2) then
 		which_param = [25, 26]
 	else if (input_dim == 3) then
-		which_param = [25, 26, 27]
+		which_param = [25, 26, 27] 
 	else if (input_dim == 4) then
 		which_param = [25, 26, 27, 28]
         else if (input_dim == 5) then
@@ -104,7 +108,7 @@
 		print*, "No idea what you are sampling, error incoming"
 	end if
 
-	! Derive some integers and parameter lengths needed to calculate the Grid
+	! Derive integers and parameter lengths needed to calculate the Grid
 	do ii=1, input_dim
 		n_input(ii) = ( BaseParams%PMax(which_param(ii)) - BaseParams%Pmin(which_param(ii)) )/BaseParams%PWidth(which_param(ii)) + 1
 	end do 
@@ -119,7 +123,7 @@
 	end do
 	
 	! allocate input parameter
-	allocate( Xdata(n_iterations, input_dim))
+	allocate( XData(n_iterations, input_dim))
 	allocate( XPred(n_Grid, input_dim) )
 	allocate( hypers(input_dim + 1) )
 	do ii=1, input_dim+1
@@ -140,48 +144,50 @@
 	end do
 	
 	end subroutine THelperRoutines_Initialise
-! Subroutine to call current Memory usage
-!	 subroutine THelperRoutines_Memory(this, valueRSS)
-!	 use ifport !if on intel compiler
-!	 class(THelperRoutines) :: this
-!	 integer, intent(out) :: valueRSS
-!	 character(len=200):: filename=' '
-!	 character(len=80) :: line
-!	 character(len=8)  :: pid_char=' '
-!	 integer :: pid
-!	 logical :: ifxst
 
-!	 valueRSS=-1    ! return negative number if not found
 
-	 !--- get process ID
+	! Prints out the memory used. Can help spotting memory leaks for debugging. 
+	! Currently no memory leaks
+	! subroutine THelperRoutines_Memory(this, valueRSS)
+	! use ifport !if on intel compiler
+	! class(THelperRoutines) :: this
+	! integer, intent(out) :: valueRSS
+	! character(len=200):: filename=' '
+	! character(len=80) :: line
+	! character(len=8)  :: pid_char=' '
+	! integer :: pid
+	! logical :: ifxst
 
-!	 pid=getpid()
-!	 write(pid_char,'(I8)') pid
-!	 filename='/proc/'//trim(adjustl(pid_char))//'/status'
+	! valueRSS=-1    ! return negative number if not found
 
-	! !--- read system file
+	! !--- get process ID
 
-!	 inquire (file=filename,exist=ifxst)
-!	 if (.not.ifxst) then
-!	   write (*,*) 'system file does not exist'
-!	   return
-!	 endif
-!
-!	 open(unit=100, file=filename, action='read')
-!	 do
-!	   read (100,'(a)',end=120) line
-!	   if (line(1:6).eq.'VmRSS:') then
-!		  read (line(7:),*) valueRSS
-!		  exit
-!	   endif
-!	 enddo
-!	 120 continue
-!	 close(100)
-!	 write(*,*) valueRSS , 'Used memory'
-!	 return
-!	 end subroutine THelperRoutines_Memory
-	
-! Subroutine creating the Grid in higher dimension
+	! pid=getpid()
+	! write(pid_char,'(I8)') pid
+	! filename='/proc/'//trim(adjustl(pid_char))//'/status'
+
+	! ! !--- read system file
+
+	! inquire (file=filename,exist=ifxst)
+	! if (.not.ifxst) then
+	! write (*,*) 'system file does not exist'
+	! return
+	! endif
+
+	! open(unit=100, file=filename, action='read')
+	! do
+	! read (100,'(a)',end=120) line
+	! if (line(1:6).eq.'VmRSS:') then
+	  ! read (line(7:),*) valueRSS
+	  ! exit
+	! endif
+	! enddo
+	! 120 continue
+	! close(100)
+	! write(*,*) valueRSS , 'Used memory'
+	! return
+	! end subroutine THelperRoutines_Memory
+
 	subroutine THelperRoutines_Linspace(this, Array, input_dim, which_param, n_input)
 	class(THelperRoutines) :: this
 	real(mcp), intent(inout) :: Array(:,:) ! dimension will be (max(n_input),input_dim)
@@ -189,10 +195,13 @@
 	integer, intent(in) :: input_dim ! how many parameter are sampled over
 	integer, intent(in), dimension(:) :: n_input ! grid size of each sample parameter
 	integer :: nn, i
-
+	! Subroutine creating the Grid. n_input is calculated during initialisation using the prior boundaries
+	! together with the step width. Linear spaced grid is created here with step width defined in ini-file
+	
+	
 	! The outer loop runs over the input dimension and selects different columns
 	! The inner loop runs over the rows and fills up with equidistant steps
-	! Note that different columns will have different lenght depending on the choices in test.ini
+	! Note that different columns will have different length depending on the choices in test.ini
 	do nn=1, input_dim
 		do i=1, n_input(nn)-1 
 			Array(i, nn)= BaseParams%Pmin(which_param(nn)) + (i-1)*BaseParams%PWidth(which_param(nn))
@@ -201,7 +210,6 @@
 	end do
 	end subroutine THelperRoutines_Linspace
 
-! Grid width of refine is defined in here	
 	subroutine THelperRoutines_Linspace_refine(this, Array, XBest, input_dim, which_param, n_refine)
 	class(THelperRoutines) :: this
 	real(mcp), intent(inout) :: Array(:,:) ! dimension will be (max(n_input),input_dim)
@@ -209,6 +217,8 @@
 	integer, intent(in), dimension(:) :: which_param ! which parameters are sampled over
 	integer, intent(in) :: input_dim, n_refine
 	integer :: j, i
+	! Subroutine creating the linear spacing for the refine run. Uses the best fit point and creates new boundaries 2 +/-step widths
+	! Then using n_refine to divide the range into smaller steps. Default is 21 steps => 5 times smaller step width
 
 	do j=1, input_dim
 		do i=1, n_refine
@@ -227,25 +237,24 @@
 	
 	end subroutine THelperRoutines_Linspace_refine
 	
-! Grid making routine turns two arrays(:,:) into a grid. size(b,1) has to be 1
-	subroutine THelperRoutines_GridMaker(this, a, b, c)
+	subroutine THelperRoutines_GridMaker(this, A, B, C)
 	class(THelperRoutines) :: this
-	real(mcp), intent(in) :: a(:,:), b(:,:)	
+	real(mcp), intent(in) :: A(:,:), B(:,:)	
 	real(mcp), allocatable, intent(inout) :: c(:,:)
 	integer :: i, j, m
+	! Routine creates the grid. Returns Array C. Array A can be any 2D array. Array B has to have size(b,2)=1
 
-	allocate(c( size(a,1) * size(b,1), size(a,2)+1))
+	allocate(C( size(A,1) * size(B,1), size(A,2)+1))
 	m=1
-	do j=1, size(b,1)
-		do i=1, size(a,1)
-			c(m, 1:size(a,2)) = a(i,:)
-			c(m, size(c,2)) = b(j,1)
+	do j=1, size(B,1)
+		do i=1, size(A,1)
+			C(m, 1:size(A,2)) = A(i,:)
+			C(m, size(C,2)) = B(j,1)
 			m = m + 1
 		end do
 	end do
 	end subroutine THelperRoutines_GridMaker	
 		
-! Grid for input parameters using Max, Min and Width provided from .ini file
 	subroutine THelperRoutines_Grid(this, n_max, n_input, input_dim, which_param, XPred)
 	class(THelperRoutines) :: this
 	real(mcp), intent(inout) :: XPred(:,:)
@@ -253,6 +262,9 @@
 	integer, intent(in), dimension(:) :: n_input
 	real(mcp), allocatable :: Array(:,:), A(:,:), temp(:,:), temp2(:,:)
 	integer :: i,j,k,m,o,p
+	! Grid for input parameters using Max, Min and Width provided from .ini file. Calls GridMaker D-1 times 
+	! D = number of input parameters
+
 	! Allocating the temporary array containing all coordinates (not all combinations)
 	allocate(Array(n_max,input_dim))
 	! Creating the temporary array
@@ -279,7 +291,6 @@
 	write(*,*)'Total number of grid points', shape(XPred)
 	end subroutine THelperRoutines_Grid
 	
-! 	Grid for refined !!! Note: Should be able to reuse Grid, but I didn't write the subroutine general enough smarter to write new routine
 	subroutine THelperRoutines_Grid_Refine(this, input_dim, n_refine, which_param, XBest, XPred)
 	class(THelperRoutines) :: this
 	real(mcp), intent(inout) :: XPred(:,:)
@@ -287,6 +298,7 @@
 	integer, intent(in) :: input_dim, n_refine, which_param(:)
 	real(mcp), allocatable :: Array(:,:), A(:,:), temp(:,:), temp2(:,:)
 	integer :: i,j,k
+	! Creates the grid for the refined grid
 	
 	allocate(Array(n_refine, input_dim))
 	call this%Linspace_refine(Array,XBest, input_dim, which_param, n_refine)
@@ -311,7 +323,6 @@
 	XPred = temp
 	end subroutine THelperRoutines_Grid_Refine
 
-! Create random point to sample from Grid
 	subroutine THelperRoutines_RandomSample(this, Params, n_random, n_Grid, XPred, XData, YData, which_param)
 	class(THelperRoutines) :: this
 	class(ParamSet) :: Params
@@ -319,7 +330,8 @@
 	real(mcp) :: rng, mean, std
 	integer, intent(in) :: n_Grid, n_random, which_param(:) ! no need for n_Grid
 	integer :: i, k , ii, iii
-	
+	! Takes random samples from the grid
+	! simple rng method always starts with the same seed.
 
 	write(*,*) 'Taking', n_random,  'random samples from the Grid before starting the Baysian Optimisation'
 	do i=1, n_random
@@ -349,11 +361,12 @@
 	end do
 	end subroutine THelperRoutines_RandomSample	
 
-! Helper Routine to print matrix output nicer
 	subroutine THelperRoutines_PrintMatrix(this, A)
 	class(THelperRoutines) :: this
 	real(mcp), intent(in), dimension(:,:)::A
 	integer :: i,j,m,n
+	! Routine to print matrix easier to read format
+
 	n = size(A,1)
 	m = size(A,2)
 	do, i=1,n
@@ -361,13 +374,15 @@
 	enddo
 	end subroutine THelperRoutines_PrintMatrix
 	
-! Cholesky Decomposition into lower triangular matrix
 	function THelperRoutines_Cholesky(this, M) result(A)
 	class(THelperRoutines) :: this
 	real(mcp), intent(in), dimension(:,:) :: M
 	real(mcp), dimension(size(M,1),size(M,2)) :: A
 	integer :: n, info,i,j
 	character :: UPLO
+	! Cholesky Decomposition into lower triangular matrix
+	! Uses MKL routine DPOTRF
+
 	n = size(M,1)
 	UPLO = 'L' ! change to 'U'for upper triangular matrix
 	! A will be overwritten by output of dpotrf, so copy
@@ -398,15 +413,12 @@
     class(THelperRoutines) :: this
 	Type(ParamSet) Params, Trial
     real(mcp) :: logLike
+	! calls likelihood function, removes baseline and clears memory
 	Trial = Params
 	logLike = -this%LikeCalculator%GetLogLike(Trial) - this%baseline
-!	if (logLike<-100) then
-!		logLike = -100
-!	end if
-	call Trial%Clear(Params)
+	call Trial%Clear(Params)! This line avoids memory leak
 	end function THelperRoutines_LogLike
 	
-! Using dgesv to solve linear equation M*x=b with x, b rank 1
 	function THelperRoutines_SolvVec(this, M, b) result(x)
 	class(THelperRoutines) :: this
 	real(mcp), intent(in) :: M(:,:)
@@ -415,6 +427,7 @@
 	real(mcp), dimension(size(b)) :: x
 	integer :: N, NRHS, info
 	integer :: ipiv(size(B,1))
+	! Using DGESV to solve linear equation M*x=b for x, rank(b) 1, rank(M)= 1
 
 	N = size(M, 1)
         NRHS = 1
@@ -430,7 +443,6 @@
 	end if
 	end function THelperRoutines_SolvVec
 	
-! Using dgesv to solve linear equation M*X=B with X,B rank 2
 	function THelperRoutines_SolvMat(this, M, B) result(X)
 	class(THelperRoutines) :: this
 	real(mcp), intent(in) :: M(:,:)
@@ -439,6 +451,7 @@
 	real(mcp), dimension(size(B,1),size(B,2)) :: X
 	integer :: N, NRHS,  info
 	integer :: ipiv(size(B,1))
+	! Using DGESV to solve linear equation M*X=B with X,B,M rank 2
 
 	N = size(M, 1)
 	NRHS = size(B,2)
@@ -460,7 +473,8 @@
 	real(mcp), intent(in) :: Ydata(:)
 	real(mcp), intent(inout) :: Ydata_norm(size(Ydata))
 	real(mcp), intent(out) :: mean, std
-	
+	! Rescales data by the mean to have the GPR around mu=0
+	! std will be used to rescale the prior width
 	mean = sum(Ydata)/size(Ydata)
 	Ydata_norm = Ydata - mean
         if (Feedback>1) write(*,*) 'mean of data is: ', mean
@@ -470,12 +484,13 @@
 
 	end subroutine THelperRoutines_Normalize_Y
 
-! Creates output file for 3-5 dimensional array1 and 1D array2
 	subroutine THelperRoutines_CreateOutput(this, array1, array2, text)
 	class(THelperRoutines) :: this
 	integer :: i
 	real(mcp), intent(in) :: array1(:,:), array2(:)
 	character(len =*) :: text
+	! Creates output file for 3-5 dimensional array1 and 1D array2
+	! Array1 is supposed to be XData and array2 is YData
 	open(1, file=text)
 	do i=1, size(array2)
 		if (size(array1,2)==3) then
@@ -489,33 +504,36 @@
 	close(1)
 	end subroutine THelperRoutines_CreateOutput
 
-! Creates output file for 3-5 dimensional array1 and 1D array2, array3
-        subroutine THelperRoutines_OutputProfile(this, array1, array2, array3, text)
-        class(THelperRoutines) :: this
-        integer :: i
-        real(mcp), intent(in) :: array1(:,:), array2(:), array3(:)
-        character(len =*) :: text
-        open(1, file=text)
-        do i=1, size(array2)
-                if (size(array1,2)==3) then
-                        write(1,'(6E15.5)') array1(i,1), array1(i,2), array1(i,3), array2(i), array3(i)
-                else if (size(array1,2)==4) then
-                        write(1,'(6E15.5)') array1(i,1), array1(i,2), array1(i,3), array1(i,4), array2(i), array3(i)
-                else if (size(array1,2)==5) then
-                        write(1,'(6E15.5)') array1(i,1), array1(i,2), array1(i,3), array1(i,4), array1(i,5), array2(i), array3(i)
-                end if
-        end do
-        close(1)
-        end subroutine THelperRoutines_OutputProfile
+	subroutine THelperRoutines_OutputProfile(this, array1, array2, array3, text)
+	class(THelperRoutines) :: this
+	integer :: i
+	real(mcp), intent(in) :: array1(:,:), array2(:), array3(:)
+	character(len =*) :: text
+	! Creates output file for 3-5 dimensional array1 and 1D array2, array3
+	! If you also want to output mean and std from GPR
 
-! Remove Sampled point from Grid
+	open(1, file=text)
+	do i=1, size(array2)
+			if (size(array1,2)==3) then
+					write(1,'(6E15.5)') array1(i,1), array1(i,2), array1(i,3), array2(i), array3(i)
+			else if (size(array1,2)==4) then
+					write(1,'(6E15.5)') array1(i,1), array1(i,2), array1(i,3), array1(i,4), array2(i), array3(i)
+			else if (size(array1,2)==5) then
+					write(1,'(6E15.5)') array1(i,1), array1(i,2), array1(i,3), array1(i,4), array1(i,5), array2(i), array3(i)
+			end if
+	end do
+	close(1)
+	end subroutine THelperRoutines_OutputProfile
+
 	subroutine THelperRoutines_RemoveData(this, XPred, n, input_dim)
 	class(THelperRoutines) :: this
 	real(mcp), intent(inout), allocatable, dimension(:,:) :: XPred 
 	integer , intent(in) :: n, input_dim
 	integer :: nn
 	real(mcp), allocatable, dimension(:,:) :: temp
-	
+	! Remove Sampled point from Grid
+
+
 	allocate(temp(size(XPred,1), size(XPred,2))) ! Copy XPred, because it will be overwritten
 	temp = XPred
 	deallocate(XPred)
@@ -525,18 +543,17 @@
 	end do
 	end subroutine THelperRoutines_RemoveData
 
-! gives probability density function of the normal Gauss
 	subroutine THelperRoutines_normal_pdf(this, X, pdf)
 	class(THelperRoutines) :: this
 	real(mcp), dimension(:) :: pdf
 	real(mcp), dimension(:) :: X
-	
+	! gives probability density function of the normal Gauss
+
 	pdf = exp( -0.5_mcp * X * X)/ Sqrt(2.0_mcp * this%const_pi)
 	return
 	end subroutine THelperRoutines_normal_pdf
 
 
-! Removes points with low expected Improvement
 	subroutine THelperRoutines_RemoveGrid(this, grid, EI, input_dim, Cutoff_EI)
 	class(THelperRoutines) :: this
 	real(mcp), allocatable, intent(inout), dimension(:,:) :: grid
@@ -546,7 +563,8 @@
 	real(mcp), intent(in) :: Cutoff_EI
 	integer, intent(in) :: input_dim
 	integer :: ii
-	
+	! Removes points with low expected Improvement
+
 	allocate(temp_grid(size(grid,1), size(grid,2))) ! Copy XPred, because it will be overwritten
 	temp_grid = grid
 	deallocate(grid)

@@ -48,11 +48,11 @@
         real(dl) :: nt  = 0._dl !tensor spectral indices
         real(dl) :: ntrun  = 0._dl !tensor spectral index running
         real(dl) :: r  = 0._dl !ratio of scalar to tensor initial power spectrum amplitudes
-        real(dl) :: AmpOsc = 0.008_dl !amplitude of features
-        real(dl) :: linfreq = 1.05_dl !frequency of features
-        real(dl) :: phase = 0.5_dl !phase of features
-        real(dl) :: NewP4 = 0._dl
-        real(dl) :: NewP5 = 0._dl
+        real(dl) :: feat_amp = 0.008_dl !amplitude of features
+        real(dl) :: feat_freq = 1.05_dl !frequency of features
+        real(dl) :: feat_phase = 0.5_dl !phase of features
+        real(dl) :: feat_P4 = 0._dl
+        real(dl) :: feat_P5 = 0._dl
         integer  :: whichmodel = 0
         real(dl) :: pivot_scalar = 0.05_dl !pivot scales in Mpc^{-1}
         real(dl) :: pivot_tensor = 0.05_dl
@@ -145,43 +145,44 @@
     lnrat = log(k/this%pivot_scalar)
     TInitialPowerLaw_ScalarPower = this%As * exp(lnrat * (this%ns - 1 + &
         &             lnrat * (this%nrun / 2 + this%nrunrun / 6 * lnrat)))
-
-    if (this%AmpOsc .ne. 0) then
-! Linear oscillations
+	! Modifications for the power spectrum only appear if feat_amp is non-zero. Choose model in .ini file
+	! You can easily add other models by changing one of these models and use the 5 parameters 
+    if (this%feat_amp .ne. 0) then
+	! Linear oscillations
                 if (this%whichmodel == 1) then
                         TInitialPowerLaw_ScalarPower = TInitialPowerLaw_ScalarPower * &
-                &       (1 + this%AmpOsc * cos(this%linfreq * exp(lnrat) +  const_twopi * this%phase))
-! Logarithmic oscillations
+                &       (1 + this%feat_amp * cos(this%feat_freq * exp(lnrat) +  const_twopi * this%feat_phase))
+	! Logarithmic oscillations
                 else if (this%whichmodel == 2) then
                         TInitialPowerLaw_ScalarPower = TInitialPowerLaw_ScalarPower * &
-                &       (1 + this%AmpOsc * cos(this%linfreq * lnrat +  const_twopi * this%phase))
-! Running logarithmic oscillations
+                &       (1 + this%feat_amp * cos(this%feat_freq * lnrat +  const_twopi * this%feat_phase))
+	! Running logarithmic oscillations
                 else if (this%whichmodel == 3) then
                         TInitialPowerLaw_ScalarPower = TInitialPowerLaw_ScalarPower * &
-                &       (1 + this%AmpOsc * cos(this%linfreq * lnrat * (1 + this%NewP4 * lnrat) +  const_twopi * this%phase))
-! Primoridial Standard Clocks (Expanding)
+                &       (1 + this%feat_amp * cos(this%feat_freq * lnrat * (1 + this%feat_P4 * lnrat) +  const_twopi * this%feat_phase))
+	! Primoridial Standard Clocks (Expanding)
                 else if (this%whichmodel == 4) then
-                        if (k/this%NewP4>=1) then ! k/k_*>1
+                        if (k/this%feat_P4>=1) then ! k/k_*>1
                                TInitialPowerLaw_ScalarPower = TInitialPowerLaw_ScalarPower * &
-                        &      (1 + this%AmpOsc * cos(this%linfreq * log(k) + const_twopi * this%phase))
+                        &      (1 + this%feat_amp * cos(this%feat_freq * log(k) + const_twopi * this%feat_phase))
                         else
                                 TInitialPowerLaw_ScalarPower = TInitialPowerLaw_ScalarPower
                         end if
-! Primordial Standard Clocks (Contracting) effective frequency for Ekpyro
+	! Primordial Standard Clocks (Contracting) effective frequency for Ekpyro kp=0.012
                 else if (this%whichmodel == 5) then
-                        ! if (k/this%NewP4>=1 .and. this%NewP4*this%linfreq*(k/this%NewP4)**(1/this%NewP5-1)<10**4) then ! k/k_*>1 
-                        if (k/this%NewP4<=1) then ! k/k_*<1
+                        ! if (k/this%feat_P4>=1 .and. this%feat_P4*this%feat_freq*(k/this%feat_P4)**(1/this%feat_P5-1)<10**4) then ! k/k_*>1 
+                        if (k/this%feat_P4<=1) then ! k/k_*<1
                                 TInitialPowerLaw_ScalarPower = TInitialPowerLaw_ScalarPower * &
-                        &      (1 + this%AmpOsc * cos(this%linfreq *(k/0.012)**(1/this%NewP5) + const_twopi * this%phase)) 
+                        &      (1 + this%feat_amp * cos(this%feat_freq *(k/0.012)**(1/this%feat_P5) + const_twopi * this%feat_phase)) 
                         else
                                 TInitialPowerLaw_ScalarPower = TInitialPowerLaw_ScalarPower
                         end if
-! Primordial Standard Clocks (Contracting) effective frequency for Bounce
+	! Primordial Standard Clocks (Contracting) effective frequency for Bounce kp=0.11
                 else if (this%whichmodel == 6) then
-                        ! if (k/this%NewP4>=1 .and. this%NewP4*this%linfreq*(k/this%NewP4)**(1/this%NewP5-1)<10**4) then ! k/	k_*>1
-                        if (k/this%NewP4<=1) then ! k/k_*<1
+                        ! if (k/this%feat_P4>=1 .and. this%feat_P4*this%feat_freq*(k/this%feat_P4)**(1/this%feat_P5-1)<10**4) then ! k/	k_*>1
+                        if (k/this%feat_P4<=1) then ! k/k_*<1
                                 TInitialPowerLaw_ScalarPower = TInitialPowerLaw_ScalarPower * &
-                        &      (1 + this%AmpOsc * cos(this%linfreq * (k/0.11)**(1/this%NewP5) + const_twopi * this%phase))
+                        &      (1 + this%feat_amp * cos(this%feat_freq * (k/0.11)**(1/this%feat_P5) + const_twopi * this%feat_phase))
                         else
                                 TInitialPowerLaw_ScalarPower = TInitialPowerLaw_ScalarPower
                         end if
@@ -272,11 +273,11 @@
         this%At=0
     end if
 
-        this%AmpOsc =  Ini%Read_Double(CompatKey(Ini,'amp_osc'))
-        this%linfreq = Ini%Read_Double(CompatKey(Ini,'lin_freq'))
-        this%phase = Ini%Read_Double(CompatKey(Ini,'phase_osc'))
-        this%NewP4 = Ini%Read_Double(CompatKey(Ini,'NewP4'))
-        this%NewP5 = Ini%Read_Double(CompatKey(Ini,'NewP5'))
+        this%feat_amp =  Ini%Read_Double(CompatKey(Ini,'feat_amp'))
+        this%feat_freq = Ini%Read_Double(CompatKey(Ini,'feat_freq'))
+        this%feat_phase = Ini%Read_Double(CompatKey(Ini,'feat_phase'))
+        this%feat_P4 = Ini%Read_Double(CompatKey(Ini,'feat_P4'))
+        this%feat_P5 = Ini%Read_Double(CompatKey(Ini,'feat_P5'))
         this%whichmodel = Ini%Read_Int(CompatKey(Ini,'whichmodel'))
 
 

@@ -66,17 +66,17 @@
         real(dl) :: BackgroundTimeStepBoost = 1._dl !number of time steps for background thermal history interpolation
 
         real(dl) :: IntTolBoost = 1._dl !Tolerances for integrating differential equations
-
+!
         real(dl) :: SourcekAccuracyBoost = 2._dl !Accuracy of k sampling for source time integration
-
+!
         real(dl) :: IntkAccuracyBoost = 2._dl !Accuracy of k sampling for integration
-
+!
         real(dl) :: TransferkBoost = 2._dl !Accuracy of k sampling for transfer functions
 
         real(dl) :: NonFlatIntAccuracyBoost = 1._dl !Accuracy of non-flat time integration
 
         real(dl) :: BessIntBoost = 1._dl !Accuracy of bessel integration truncation
-
+!
         real(dl) :: LensingBoost = 2._dl !Accuracy for CMB lensing of CMB power spectra
 
         real(dl) :: NonlinSourceBoost = 1._dl !Steps and kmax for the non-linear correction

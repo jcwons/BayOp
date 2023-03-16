@@ -328,8 +328,9 @@
 
     call Params%Clear(keep=this%MinParams)
     Params = this%MinParams
-this%minimize_mcmc_refine_num=20
-!    if (this%minimize_mcmc_refine_num>0) then
+
+    if (this%minimize_mcmc_refine_num>0 .and. .False.) then
+	
         if (Feedback > 0) print *,MpiRank,'Refining minimimum using low temp MCMC'
         if (Feedback > 0) print *,MpiRank, 'Current logLike: ', best_like
 
@@ -375,7 +376,7 @@ this%minimize_mcmc_refine_num=20
                 Temperature = Temperature/ this%minimize_temp_scale_factor
         end do
         deallocate(LikeCalcMCMC)
-!    end if
+    end if
 
     is_best_bestfit=.true.
 #ifdef MPI

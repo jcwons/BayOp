@@ -22,11 +22,11 @@ r             r #ratio of tensor to scalar primordial amplitudes at pivot scale
 nt            n_t
 ntrun         n_{t,{\rm run}}
 Aphiphi       A^{\phi\phi}_L #scaling of lensing potential power (lensed power spectra unchanged)
-AmpOsc        amp_osc
-linfreq       lin_freq
-phase         phase
-newP4         newP4
-newP5         newP5
+feat_amp      feat_amp
+feat_freq     feat_freq
+feat_phase    feat_phase
+feat_P4       feat_P4
+feat_P5       feat_P5
 whichmodel    whichmodel
 H0*           H_0		#hubble parameter is H0 km/s/Mpc
 omegal*       \Omega_\Lambda

@@ -800,7 +800,7 @@
         P%Transfer%high_precision=.true.
         P%Transfer%kmax=P%Transfer%kmax + 0.2
     end if
-    P%Accuracy%AccuracyBoost = 1
+    P%Accuracy%AccuracyBoost = 1.2
     P%Accuracy%lAccuracyBoost = 1
     P%Accuracy%lSampleBoost = 50
     P%Accuracy%AccurateReionization = .true.
@@ -872,11 +872,11 @@
     class is (TInitialPowerLaw)
         InitPower%pivot_scalar = CosmoSettings%pivot_k
         InitPower%pivot_tensor = CosmoSettings%tensor_pivot_k
-        InitPower%AmpOsc = CMB%InitPower(AmpOsc_index)
-        InitPower%linfreq = CMB%InitPower(linfreq_index)
-        InitPower%phase = CMB%InitPower(phase_index)
-        InitPower%newP4 = CMB%InitPower(newP4_index)
-        InitPower%newP5 = CMB%InitPower(newP5_index)
+        InitPower%feat_amp = CMB%InitPower(feat_Amp_index)
+        InitPower%feat_freq = CMB%InitPower(feat_freq_index)
+        InitPower%feat_phase = CMB%InitPower(feat_phase_index)
+        InitPower%feat_P4 = CMB%InitPower(P4_index)
+        InitPower%feat_P5 = CMB%InitPower(P5_index)
         InitPower%whichmodel = CMB%InitPower(whichmodel_index)        
 
 	if (InitPower%pivot_tensor/=InitPower%pivot_scalar) InitPower%tensor_parameterization = tensor_param_rpivot
