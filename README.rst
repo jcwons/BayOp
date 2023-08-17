@@ -24,6 +24,8 @@ The resulting code is able to find the set of cosmological parameters describing
 .. image:: ./tests/image.png
    :width: 500
 
+For more detail see the `published article <https://arxiv.org/abs/2112.08571>`_.
+
 Installation and tests
 ================
 
@@ -66,4 +68,4 @@ the .ini file.
 Algorithm details
 ==================
 
-See the latest `paper <http://arxiv.org/abs/1304.4473>`_.
+See the latest `paper <https://arxiv.org/abs/2112.08571>`_.
