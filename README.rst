@@ -7,8 +7,22 @@ Bayesian Optimisation via CosmoMC
 Description
 ============
 
-This code is a fork to CosmoMC and replaces the MCMC sampling alogorithm with a Bayesian Optimisation.
-The code finds the global best fit for modulations of the primordial power spectrum efficiently.
+This code is a fork to CosmoMC and replaces the MCMC sampling algorithm with a Bayesian Optimisation. It efficiently samples the likelihood space of complex likelihood functions to find the set of best fit parameters.
+
+Motivation
+============
+The conventionally used MCMC sampling method performs well dimensional feature space with simple and well-behaved likelihood functions. Certain primordial models produce complicated likelihood functions with multiple local maxima. The MCMC Sampling method struggles with these likelihood functions. Reliable maximising of the likelihood function requires a lot of parameter tuning and a lot of time. I replaced the MCMC sampling with Bayesian Optimisation to find the maximum of likelihood function.
+
+Goal
+=====
+Design an algorithm and code that is simple and fast to use. It should be applicable to a large range of models without the need to tune any parameters. Furthermore, the runtime with the MCMC sampling was of the order weeks. I want to reduce this to the order of hours.
+
+Result
+========
+The resulting code is able to find the set of cosmological parameters describing the data best. Furthermore, it does so in only a couple of hours (depending on the number of CPUs available). Finally, we were able to reproduce the results of the MCMC sampling and even find better parameter combinations leading to an improved fit. Below, I show the results for different models comparing the MCMC best fit (blue) to the results using the BayOp algorithm (red) for a feature :math:`$\omega_X$`. The goodness of the fit is given by :math:`$\Delta\chi^2$`.
+
+.. image:: ./tests/image.png
+   :width: 500
 
 Installation and tests
 ================
